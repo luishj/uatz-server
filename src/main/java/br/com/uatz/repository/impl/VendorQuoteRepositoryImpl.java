@@ -24,6 +24,11 @@ public class VendorQuoteRepositoryImpl implements VendorQuoteRepository, Panache
     }
 
     @Override
+    public Optional<VendorQuote> findByRequestIdAndVendorId(Long requestId, Long vendorId) {
+        return find("request.id = ?1 and vendor.id = ?2", requestId, vendorId).firstResultOptional();
+    }
+
+    @Override
     public List<VendorQuote> findByRequestId(Long requestId) {
         return find("request.id", requestId).list();
     }

@@ -21,5 +21,13 @@ public class BudgetItemRepositoryImpl implements BudgetItemRepository, PanacheRe
     public List<BudgetItem> findByRequestId(Long requestId) {
         return find("request.id", requestId).list();
     }
-}
 
+    @Override
+    public List<BudgetItem> findByRequestIds(List<Long> requestIds) {
+        if (requestIds == null || requestIds.isEmpty()) {
+            return List.of();
+        }
+
+        return find("request.id in ?1", requestIds).list();
+    }
+}

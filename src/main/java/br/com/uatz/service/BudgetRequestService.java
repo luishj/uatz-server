@@ -18,5 +18,9 @@ public interface BudgetRequestService {
 
     Optional<BudgetRequestResponse> findResponseById(Long id);
 
+    Optional<BudgetRequestResponse> findResponseByIdForVendor(Long id, String vendorEmail);
+
     List<BudgetRequestResponse> findAllWithItems();
+
+    List<BudgetRequestResponse> findAllWithItemsForVendor(String vendorEmail);
 }

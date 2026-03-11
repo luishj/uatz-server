@@ -24,6 +24,16 @@ public class VendorRepositoryImpl implements VendorRepository, PanacheRepository
     }
 
     @Override
+    public Optional<Vendor> findByEmail(String email) {
+        return find("email", email).firstResultOptional();
+    }
+
+    @Override
+    public List<Vendor> listAllVendors() {
+        return listAll();
+    }
+
+    @Override
     public List<Vendor> findAllActive() {
         return find("active", true).list();
     }

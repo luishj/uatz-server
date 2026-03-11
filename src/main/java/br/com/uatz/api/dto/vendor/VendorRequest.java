@@ -11,9 +11,12 @@ public record VendorRequest(
         @NotBlank(message = "phone is required")
         @Size(max = 30, message = "phone must have at most 30 characters")
         String phone,
+        @NotBlank(message = "email is required")
         @Email(message = "email must be valid")
         @Size(max = 150, message = "email must have at most 150 characters")
         String email,
+        @Size(min = 6, max = 100, message = "password must have between 6 and 100 characters")
+        String password,
         @Size(max = 120, message = "city must have at most 120 characters")
         String city,
         @Size(max = 60, message = "state must have at most 60 characters")

@@ -13,6 +13,7 @@ import br.com.uatz.repository.BudgetItemRepository;
 import br.com.uatz.repository.BudgetRequestRepository;
 import br.com.uatz.repository.ClientRepository;
 import br.com.uatz.repository.ProductRepository;
+import br.com.uatz.service.BudgetRequestDistributionService;
 import br.com.uatz.service.BudgetRequestService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -29,17 +30,20 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
     private final BudgetItemRepository budgetItemRepository;
     private final ClientRepository clientRepository;
     private final ProductRepository productRepository;
+    private final BudgetRequestDistributionService budgetRequestDistributionService;
 
     public BudgetRequestServiceImpl(
             BudgetRequestRepository budgetRequestRepository,
             BudgetItemRepository budgetItemRepository,
             ClientRepository clientRepository,
-            ProductRepository productRepository
+            ProductRepository productRepository,
+            BudgetRequestDistributionService budgetRequestDistributionService
     ) {
         this.budgetRequestRepository = budgetRequestRepository;
         this.budgetItemRepository = budgetItemRepository;
         this.clientRepository = clientRepository;
         this.productRepository = productRepository;
+        this.budgetRequestDistributionService = budgetRequestDistributionService;
     }
 
     @Override
@@ -87,9 +91,38 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
     }
 
     @Override
+    public Optional<BudgetRequestResponse> findResponseByIdForVendor(Long id, String vendorEmail) {
+        List<Long> allowedRequestIds = budgetRequestDistributionService.findAssignedRequestIdsForVendor(vendorEmail);
+
+        if (!allowedRequestIds.contains(id)) {
+            return Optional.empty();
+        }
+
+        return findResponseById(id);
+    }
+
+    @Override
     public List<BudgetRequestResponse> findAllWithItems() {
         return budgetRequestRepository.listAllBudgetRequests()
                 .stream()
+                .map(budgetRequest -> BudgetRequestApiMapper.toResponse(
+                        budgetRequest,
+                        budgetItemRepository.findByRequestId(budgetRequest.getId())
+                ))
+                .toList();
+    }
+
+    @Override
+    public List<BudgetRequestResponse> findAllWithItemsForVendor(String vendorEmail) {
+        List<Long> allowedRequestIds = budgetRequestDistributionService.findAssignedRequestIdsForVendor(vendorEmail);
+
+        if (allowedRequestIds.isEmpty()) {
+            return List.of();
+        }
+
+        return budgetRequestRepository.listAllBudgetRequests()
+                .stream()
+                .filter(budgetRequest -> allowedRequestIds.contains(budgetRequest.getId()))
                 .map(budgetRequest -> BudgetRequestApiMapper.toResponse(
                         budgetRequest,
                         budgetItemRepository.findByRequestId(budgetRequest.getId())

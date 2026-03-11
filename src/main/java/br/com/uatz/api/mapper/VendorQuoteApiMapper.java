@@ -1,7 +1,10 @@
 package br.com.uatz.api.mapper;
 
+import br.com.uatz.api.dto.vendorquote.VendorQuoteDetailsResponse;
+import br.com.uatz.api.dto.vendorquote.VendorQuoteItemResponse;
 import br.com.uatz.api.dto.vendorquote.VendorQuoteResponse;
 import br.com.uatz.api.dto.vendorquote.VendorQuoteSummaryResponse;
+import br.com.uatz.model.entity.VendorQuoteItem;
 import br.com.uatz.model.entity.VendorQuote;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -22,6 +25,22 @@ public final class VendorQuoteApiMapper {
                 vendorQuote.getTotalPrice(),
                 vendorQuote.getMessage(),
                 vendorQuote.getCreatedAt()
+        );
+    }
+
+    public static VendorQuoteDetailsResponse toDetailsResponse(VendorQuote vendorQuote) {
+        return new VendorQuoteDetailsResponse(
+                vendorQuote.getId(),
+                vendorQuote.getRequest().getId(),
+                vendorQuote.getRequest().getCreatedAt(),
+                vendorQuote.getVendor().getId(),
+                vendorQuote.getVendor().getName(),
+                vendorQuote.getTotalPrice(),
+                vendorQuote.getMessage(),
+                vendorQuote.getCreatedAt(),
+                vendorQuote.getItems().stream()
+                        .map(VendorQuoteApiMapper::toItemResponse)
+                        .toList()
         );
     }
 
@@ -62,6 +81,18 @@ public final class VendorQuoteApiMapper {
                 averagePrice,
                 bestQuote,
                 responses
+        );
+    }
+
+    private static VendorQuoteItemResponse toItemResponse(VendorQuoteItem item) {
+        return new VendorQuoteItemResponse(
+                item.getId(),
+                item.getBudgetItemId(),
+                item.getProductName(),
+                item.getQuantity(),
+                item.getUnit(),
+                item.getUnitPrice(),
+                item.getLineTotal()
         );
     }
 }

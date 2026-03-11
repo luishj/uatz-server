@@ -33,5 +33,13 @@ public final class VendorApiMapper {
                 vendor.getActive()
         );
     }
-}
 
+    public static void updateEntity(Vendor vendor, VendorRequest request) {
+        vendor.setName(request.name());
+        vendor.setPhone(request.phone());
+        vendor.setEmail(request.email());
+        vendor.setCity(request.city());
+        vendor.setState(request.state());
+        vendor.setActive(request.active() != null ? request.active() : vendor.getActive());
+    }
+}

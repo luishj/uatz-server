@@ -10,6 +10,8 @@ public interface VendorQuoteRepository {
 
     Optional<VendorQuote> findOptionalById(Long id);
 
+    Optional<VendorQuote> findByRequestIdAndVendorId(Long requestId, Long vendorId);
+
     List<VendorQuote> findByRequestId(Long requestId);
 
     List<VendorQuote> findByVendorId(Long vendorId);

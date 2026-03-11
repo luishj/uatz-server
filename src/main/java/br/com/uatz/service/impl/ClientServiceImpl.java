@@ -4,6 +4,7 @@ import br.com.uatz.model.entity.Client;
 import br.com.uatz.repository.ClientRepository;
 import br.com.uatz.service.ClientService;
 import jakarta.enterprise.context.ApplicationScoped;
+import java.util.List;
 import java.util.Optional;
 
 @ApplicationScoped
@@ -18,6 +19,11 @@ public class ClientServiceImpl implements ClientService {
     @Override
     public Client save(Client client) {
         return clientRepository.save(client);
+    }
+
+    @Override
+    public List<Client> findAll() {
+        return clientRepository.listAllClients();
     }
 
     @Override

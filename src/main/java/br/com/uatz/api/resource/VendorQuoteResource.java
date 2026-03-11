@@ -1,11 +1,13 @@
 package br.com.uatz.api.resource;
 
 import br.com.uatz.api.dto.vendorquote.VendorQuoteRequest;
+import br.com.uatz.api.dto.vendorquote.VendorQuoteDetailsResponse;
 import br.com.uatz.api.dto.vendorquote.VendorQuoteResponse;
 import br.com.uatz.api.dto.vendorquote.VendorQuoteSummaryResponse;
 import br.com.uatz.api.mapper.VendorQuoteApiMapper;
 import br.com.uatz.service.VendorQuoteService;
 import jakarta.annotation.security.RolesAllowed;
+import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -17,6 +19,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 
 @Path("/api/vendor-quotes")
 @RolesAllowed({"ADMIN", "OPERATOR", "VENDOR"})
@@ -25,6 +28,8 @@ import java.util.List;
 public class VendorQuoteResource {
 
     private final VendorQuoteService vendorQuoteService;
+    @Inject
+    JsonWebToken jsonWebToken;
 
     public VendorQuoteResource(VendorQuoteService vendorQuoteService) {
         this.vendorQuoteService = vendorQuoteService;
@@ -57,6 +62,15 @@ public class VendorQuoteResource {
     @Path("/request/{requestId}/summary")
     public VendorQuoteSummaryResponse summarizeByRequestId(@PathParam("requestId") Long requestId) {
         return vendorQuoteService.summarizeByRequestId(requestId);
+    }
+
+    @GET
+    @Path("/request/{requestId}/me")
+    @RolesAllowed("VENDOR")
+    public VendorQuoteDetailsResponse findCurrentVendorQuoteByRequestId(@PathParam("requestId") Long requestId) {
+        return vendorQuoteService.findByRequestIdAndVendorEmail(requestId, jsonWebToken.getName())
+                .map(VendorQuoteApiMapper::toDetailsResponse)
+                .orElseThrow(() -> new WebApplicationException("Vendor quote not found for current user", Response.Status.NOT_FOUND));
     }
 
     @GET

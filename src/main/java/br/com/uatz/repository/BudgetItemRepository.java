@@ -8,5 +8,6 @@ public interface BudgetItemRepository {
     BudgetItem save(BudgetItem item);
 
     List<BudgetItem> findByRequestId(Long requestId);
-}
 
+    List<BudgetItem> findByRequestIds(List<Long> requestIds);
+}

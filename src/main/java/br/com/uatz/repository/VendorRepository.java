@@ -10,5 +10,9 @@ public interface VendorRepository {
 
     Optional<Vendor> findOptionalById(Long id);
 
+    Optional<Vendor> findByEmail(String email);
+
+    List<Vendor> listAllVendors();
+
     List<Vendor> findAllActive();
 }

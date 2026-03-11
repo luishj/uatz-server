@@ -17,4 +17,6 @@ public interface VendorQuoteService {
     List<VendorQuote> findByVendorId(Long vendorId);
 
     VendorQuoteSummaryResponse summarizeByRequestId(Long requestId);
+
+    Optional<VendorQuote> findByRequestIdAndVendorEmail(Long requestId, String email);
 }

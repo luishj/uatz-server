@@ -1,5 +1,6 @@
 package br.com.uatz.repository.impl;
 
+import java.util.List;
 import java.util.Optional;
 
 import br.com.uatz.model.entity.Client;
@@ -16,6 +17,11 @@ public class ClientRepositoryImpl implements ClientRepository, PanacheRepository
     public Client save(Client client) {
         persist(client);
         return client;
+    }
+
+    @Override
+    public List<Client> listAllClients() {
+        return listAll();
     }
 
     @Override

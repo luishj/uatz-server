@@ -15,6 +15,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.List;
 
 @Path("/api/clients")
 @RolesAllowed({"ADMIN", "OPERATOR"})
@@ -32,6 +33,16 @@ public class ClientResource {
     public Response create(@Valid ClientRequest request) {
         ClientResponse response = ClientApiMapper.toResponse(clientService.save(ClientApiMapper.toEntity(request)));
         return Response.status(Response.Status.CREATED).entity(response).build();
+    }
+
+    @GET
+    @Path("/all")
+    @RolesAllowed("ADMIN")
+    public List<ClientResponse> findAll() {
+        return clientService.findAll()
+                .stream()
+                .map(ClientApiMapper::toResponse)
+                .toList();
     }
 
     @GET

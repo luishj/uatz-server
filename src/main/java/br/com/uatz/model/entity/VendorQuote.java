@@ -1,13 +1,17 @@
 package br.com.uatz.model.entity;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "vendor_quotes")
@@ -29,6 +33,9 @@ public class VendorQuote extends BaseEntity {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "vendorQuote", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    private List<VendorQuoteItem> items = new ArrayList<>();
 
     public BudgetRequest getRequest() {
         return request;
@@ -69,5 +76,17 @@ public class VendorQuote extends BaseEntity {
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
-}
 
+    public List<VendorQuoteItem> getItems() {
+        return items;
+    }
+
+    public void setItems(List<VendorQuoteItem> items) {
+        this.items = items;
+    }
+
+    public void addItem(VendorQuoteItem item) {
+        item.setVendorQuote(this);
+        this.items.add(item);
+    }
+}

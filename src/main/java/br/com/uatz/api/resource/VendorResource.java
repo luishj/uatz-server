@@ -5,10 +5,12 @@ import br.com.uatz.api.dto.vendor.VendorResponse;
 import br.com.uatz.api.mapper.VendorApiMapper;
 import br.com.uatz.service.VendorService;
 import jakarta.annotation.security.RolesAllowed;
+import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -16,6 +18,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 
 @Path("/api/vendors")
 @RolesAllowed({"ADMIN", "OPERATOR"})
@@ -24,6 +27,8 @@ import java.util.List;
 public class VendorResource {
 
     private final VendorService vendorService;
+    @Inject
+    JsonWebToken jsonWebToken;
 
     public VendorResource(VendorService vendorService) {
         this.vendorService = vendorService;
@@ -31,7 +36,7 @@ public class VendorResource {
 
     @POST
     public Response create(@Valid VendorRequest request) {
-        VendorResponse response = VendorApiMapper.toResponse(vendorService.save(VendorApiMapper.toEntity(request)));
+        VendorResponse response = VendorApiMapper.toResponse(vendorService.create(request));
         return Response.status(Response.Status.CREATED).entity(response).build();
     }
 
@@ -44,10 +49,37 @@ public class VendorResource {
     }
 
     @GET
+    @Path("/all")
+    @RolesAllowed("ADMIN")
+    public List<VendorResponse> findAll() {
+        return vendorService.findAll()
+                .stream()
+                .map(VendorApiMapper::toResponse)
+                .toList();
+    }
+
+    @GET
+    @Path("/me")
+    @RolesAllowed("VENDOR")
+    public VendorResponse findCurrentVendor() {
+        String email = jsonWebToken.getName();
+        return vendorService.findByEmail(email)
+                .map(VendorApiMapper::toResponse)
+                .orElseThrow(() -> new WebApplicationException("Vendor profile not found for current user", Response.Status.NOT_FOUND));
+    }
+
+    @GET
     @Path("/{id}")
     public VendorResponse findById(@PathParam("id") Long id) {
         return vendorService.findById(id)
                 .map(VendorApiMapper::toResponse)
                 .orElseThrow(() -> new WebApplicationException("Vendor not found", Response.Status.NOT_FOUND));
+    }
+
+    @PUT
+    @Path("/{id}")
+    @RolesAllowed("ADMIN")
+    public VendorResponse update(@PathParam("id") Long id, @Valid VendorRequest request) {
+        return VendorApiMapper.toResponse(vendorService.update(id, request));
     }
 }
