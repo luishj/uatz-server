@@ -5,6 +5,7 @@ import br.com.uatz.api.mapper.VendorApiMapper;
 import br.com.uatz.model.entity.Vendor;
 import br.com.uatz.model.entity.User;
 import br.com.uatz.model.enums.UserRole;
+import br.com.uatz.repository.RoleRepository;
 import br.com.uatz.repository.VendorRepository;
 import br.com.uatz.service.PasswordService;
 import br.com.uatz.service.UserService;
@@ -20,15 +21,18 @@ import java.util.Optional;
 public class VendorServiceImpl implements VendorService {
 
     private final VendorRepository vendorRepository;
+    private final RoleRepository roleRepository;
     private final UserService userService;
     private final PasswordService passwordService;
 
     public VendorServiceImpl(
             VendorRepository vendorRepository,
+            RoleRepository roleRepository,
             UserService userService,
             PasswordService passwordService
     ) {
         this.vendorRepository = vendorRepository;
+        this.roleRepository = roleRepository;
         this.userService = userService;
         this.passwordService = passwordService;
     }
@@ -103,7 +107,8 @@ public class VendorServiceImpl implements VendorService {
         user.setName(vendor.getName());
         user.setEmail(vendor.getEmail());
         user.setPasswordHash(passwordService.hash(rawPassword));
-        user.setRole(UserRole.VENDOR);
+        user.setRoleEntity(roleRepository.findByCode(UserRole.VENDOR.name())
+                .orElseThrow(() -> new WebApplicationException("Role not found", Response.Status.INTERNAL_SERVER_ERROR)));
         user.setCreatedAt(vendor.getCreatedAt());
         userService.save(user);
     }
@@ -126,7 +131,8 @@ public class VendorServiceImpl implements VendorService {
         }
 
         user.setName(vendor.getName());
-        user.setRole(UserRole.VENDOR);
+        user.setRoleEntity(roleRepository.findByCode(UserRole.VENDOR.name())
+                .orElseThrow(() -> new WebApplicationException("Role not found", Response.Status.INTERNAL_SERVER_ERROR)));
 
         if (request.password() != null && !request.password().isBlank()) {
             user.setPasswordHash(passwordService.hash(request.password()));

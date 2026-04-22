@@ -2,6 +2,7 @@ package br.com.uatz.service.impl;
 
 import br.com.uatz.api.dto.user.UserCreateRequest;
 import br.com.uatz.model.entity.User;
+import br.com.uatz.repository.RoleRepository;
 import br.com.uatz.repository.UserRepository;
 import br.com.uatz.service.PasswordService;
 import br.com.uatz.service.UserService;
@@ -17,10 +18,12 @@ import java.util.Optional;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final PasswordService passwordService;
 
-    public UserServiceImpl(UserRepository userRepository, PasswordService passwordService) {
+    public UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository, PasswordService passwordService) {
         this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
         this.passwordService = passwordService;
     }
 
@@ -40,7 +43,8 @@ public class UserServiceImpl implements UserService {
         user.setName(request.name());
         user.setEmail(request.email());
         user.setPasswordHash(passwordService.hash(request.password()));
-        user.setRole(request.role());
+        user.setRoleEntity(roleRepository.findByCode(request.role().name())
+                .orElseThrow(() -> new WebApplicationException("Role not found", Response.Status.INTERNAL_SERVER_ERROR)));
         user.setCreatedAt(LocalDateTime.now());
         return userRepository.save(user);
     }

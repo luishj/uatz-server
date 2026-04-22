@@ -18,6 +18,12 @@ public class BudgetItemRepositoryImpl implements BudgetItemRepository, PanacheRe
     }
 
     @Override
+    @Transactional
+    public void deleteByRequestId(Long requestId) {
+        delete("request.id", requestId);
+    }
+
+    @Override
     public List<BudgetItem> findByRequestId(Long requestId) {
         return find("request.id", requestId).list();
     }

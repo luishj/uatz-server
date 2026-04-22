@@ -7,6 +7,8 @@ public interface BudgetItemRepository {
 
     BudgetItem save(BudgetItem item);
 
+    void deleteByRequestId(Long requestId);
+
     List<BudgetItem> findByRequestId(Long requestId);
 
     List<BudgetItem> findByRequestIds(List<Long> requestIds);

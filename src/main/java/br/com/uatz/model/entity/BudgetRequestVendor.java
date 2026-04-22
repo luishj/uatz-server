@@ -3,8 +3,6 @@ package br.com.uatz.model.entity;
 import br.com.uatz.model.enums.BudgetRequestVendorStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -23,9 +21,9 @@ public class BudgetRequestVendor extends BaseEntity {
     @JoinColumn(name = "vendor_id", nullable = false)
     private Vendor vendor;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private BudgetRequestVendorStatus status;
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "status_id", nullable = false)
+    private StatusEntity status;
 
     @Column(name = "sent_at", nullable = false)
     private LocalDateTime sentAt;
@@ -56,10 +54,14 @@ public class BudgetRequestVendor extends BaseEntity {
     }
 
     public BudgetRequestVendorStatus getStatus() {
+        return BudgetRequestVendorStatus.valueOf(status.getCode());
+    }
+
+    public StatusEntity getStatusEntity() {
         return status;
     }
 
-    public void setStatus(BudgetRequestVendorStatus status) {
+    public void setStatusEntity(StatusEntity status) {
         this.status = status;
     }
 

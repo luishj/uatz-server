@@ -3,12 +3,15 @@ package br.com.uatz.service.impl;
 import br.com.uatz.model.entity.BudgetItem;
 import br.com.uatz.model.entity.BudgetRequest;
 import br.com.uatz.model.entity.BudgetRequestVendor;
+import br.com.uatz.model.entity.StatusEntity;
 import br.com.uatz.model.entity.Vendor;
 import br.com.uatz.model.enums.BudgetRequestStatus;
 import br.com.uatz.model.enums.BudgetRequestVendorStatus;
+import br.com.uatz.model.enums.StatusType;
 import br.com.uatz.repository.BudgetItemRepository;
 import br.com.uatz.repository.BudgetRequestRepository;
 import br.com.uatz.repository.BudgetRequestVendorRepository;
+import br.com.uatz.repository.StatusRepository;
 import br.com.uatz.repository.VendorProductRepository;
 import br.com.uatz.repository.VendorRepository;
 import br.com.uatz.service.BudgetRequestDistributionService;
@@ -27,19 +30,22 @@ public class BudgetRequestDistributionServiceImpl implements BudgetRequestDistri
     private final BudgetRequestVendorRepository budgetRequestVendorRepository;
     private final VendorRepository vendorRepository;
     private final VendorProductRepository vendorProductRepository;
+    private final StatusRepository statusRepository;
 
     public BudgetRequestDistributionServiceImpl(
             BudgetRequestRepository budgetRequestRepository,
             BudgetItemRepository budgetItemRepository,
             BudgetRequestVendorRepository budgetRequestVendorRepository,
             VendorRepository vendorRepository,
-            VendorProductRepository vendorProductRepository
+            VendorProductRepository vendorProductRepository,
+            StatusRepository statusRepository
     ) {
         this.budgetRequestRepository = budgetRequestRepository;
         this.budgetItemRepository = budgetItemRepository;
         this.budgetRequestVendorRepository = budgetRequestVendorRepository;
         this.vendorRepository = vendorRepository;
         this.vendorProductRepository = vendorProductRepository;
+        this.statusRepository = statusRepository;
     }
 
     @Override
@@ -55,15 +61,16 @@ public class BudgetRequestDistributionServiceImpl implements BudgetRequestDistri
                 .distinct()
                 .toList();
 
-        if (productIds.isEmpty()) {
-            throw new WebApplicationException("Budget request has no mapped products to distribute", Response.Status.CONFLICT);
-        }
-
         List<Vendor> activeVendors = vendorRepository.findAllActive();
-        List<BudgetRequestVendor> assignments = activeVendors.stream()
+        List<Vendor> eligibleVendors = productIds.isEmpty()
+                ? activeVendors
+                : activeVendors.stream()
                 .filter(vendor -> vendorProductRepository.findProductIdsByVendorId(vendor.getId())
                         .stream()
                         .anyMatch(productIds::contains))
+                .toList();
+
+        List<BudgetRequestVendor> assignments = eligibleVendors.stream()
                 .map(vendor -> budgetRequestVendorRepository.findByRequestIdAndVendorId(requestId, vendor.getId())
                         .orElseGet(() -> createAssignment(budgetRequest, vendor)))
                 .toList();
@@ -72,7 +79,7 @@ public class BudgetRequestDistributionServiceImpl implements BudgetRequestDistri
             throw new WebApplicationException("No eligible vendors found for this request", Response.Status.CONFLICT);
         }
 
-        budgetRequest.setStatus(BudgetRequestStatus.SENT_TO_VENDORS);
+        budgetRequest.setStatusEntity(resolveBudgetRequestStatus(BudgetRequestStatus.SENT_TO_VENDORS));
         budgetRequestRepository.save(budgetRequest);
         return assignments;
     }
@@ -113,7 +120,7 @@ public class BudgetRequestDistributionServiceImpl implements BudgetRequestDistri
                 .orElseThrow(() -> new WebApplicationException("Vendor is not assigned to this request", Response.Status.CONFLICT));
 
         if (assignment.getStatus() == BudgetRequestVendorStatus.SENT) {
-            assignment.setStatus(BudgetRequestVendorStatus.VIEWED);
+            assignment.setStatusEntity(resolveVendorAssignmentStatus(BudgetRequestVendorStatus.VIEWED));
             assignment.setViewedAt(LocalDateTime.now());
             budgetRequestVendorRepository.save(assignment);
         }
@@ -129,7 +136,7 @@ public class BudgetRequestDistributionServiceImpl implements BudgetRequestDistri
             throw new WebApplicationException("Vendor has already declined this request", Response.Status.CONFLICT);
         }
 
-        assignment.setStatus(BudgetRequestVendorStatus.RESPONDED);
+        assignment.setStatusEntity(resolveVendorAssignmentStatus(BudgetRequestVendorStatus.RESPONDED));
         if (assignment.getViewedAt() == null) {
             assignment.setViewedAt(LocalDateTime.now());
         }
@@ -137,7 +144,7 @@ public class BudgetRequestDistributionServiceImpl implements BudgetRequestDistri
         budgetRequestVendorRepository.save(assignment);
 
         BudgetRequest budgetRequest = assignment.getRequest();
-        budgetRequest.setStatus(BudgetRequestStatus.WAITING_QUOTES);
+        budgetRequest.setStatusEntity(resolveBudgetRequestStatus(BudgetRequestStatus.WAITING_QUOTES));
         budgetRequestRepository.save(budgetRequest);
     }
 
@@ -154,7 +161,7 @@ public class BudgetRequestDistributionServiceImpl implements BudgetRequestDistri
             throw new WebApplicationException("Vendor has already responded to this request", Response.Status.CONFLICT);
         }
 
-        assignment.setStatus(BudgetRequestVendorStatus.DECLINED);
+        assignment.setStatusEntity(resolveVendorAssignmentStatus(BudgetRequestVendorStatus.DECLINED));
         if (assignment.getViewedAt() == null) {
             assignment.setViewedAt(LocalDateTime.now());
         }
@@ -166,8 +173,18 @@ public class BudgetRequestDistributionServiceImpl implements BudgetRequestDistri
         BudgetRequestVendor assignment = new BudgetRequestVendor();
         assignment.setRequest(budgetRequest);
         assignment.setVendor(vendor);
-        assignment.setStatus(BudgetRequestVendorStatus.SENT);
+        assignment.setStatusEntity(resolveVendorAssignmentStatus(BudgetRequestVendorStatus.SENT));
         assignment.setSentAt(LocalDateTime.now());
         return budgetRequestVendorRepository.save(assignment);
+    }
+
+    private StatusEntity resolveBudgetRequestStatus(BudgetRequestStatus status) {
+        return statusRepository.findByTypeAndCode(StatusType.BUDGET_REQUEST, status.name())
+                .orElseThrow(() -> new WebApplicationException("Status not found", Response.Status.INTERNAL_SERVER_ERROR));
+    }
+
+    private StatusEntity resolveVendorAssignmentStatus(BudgetRequestVendorStatus status) {
+        return statusRepository.findByTypeAndCode(StatusType.BUDGET_REQUEST_VENDOR, status.name())
+                .orElseThrow(() -> new WebApplicationException("Status not found", Response.Status.INTERNAL_SERVER_ERROR));
     }
 }

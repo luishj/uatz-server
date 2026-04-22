@@ -3,8 +3,9 @@ package br.com.uatz.model.entity;
 import br.com.uatz.model.enums.UserRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
@@ -21,9 +22,9 @@ public class User extends BaseEntity {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private UserRole role;
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "role_id", nullable = false)
+    private RoleEntity role;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -53,10 +54,14 @@ public class User extends BaseEntity {
     }
 
     public UserRole getRole() {
+        return UserRole.valueOf(role.getCode());
+    }
+
+    public RoleEntity getRoleEntity() {
         return role;
     }
 
-    public void setRole(UserRole role) {
+    public void setRoleEntity(RoleEntity role) {
         this.role = role;
     }
 
@@ -68,4 +73,3 @@ public class User extends BaseEntity {
         this.createdAt = createdAt;
     }
 }
-

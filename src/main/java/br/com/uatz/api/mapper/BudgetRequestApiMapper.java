@@ -15,8 +15,11 @@ public final class BudgetRequestApiMapper {
         return new BudgetRequestResponse(
                 budgetRequest.getId(),
                 budgetRequest.getClient().getId(),
+                budgetRequest.getClient().getPhone(),
                 budgetRequest.getCity(),
                 budgetRequest.getStatus(),
+                budgetRequest.getSourceChannel(),
+                budgetRequest.getSourceMessage(),
                 budgetRequest.getCreatedAt(),
                 items.stream().map(BudgetRequestApiMapper::toItemResponse).toList()
         );
@@ -32,4 +35,3 @@ public final class BudgetRequestApiMapper {
         );
     }
 }
-

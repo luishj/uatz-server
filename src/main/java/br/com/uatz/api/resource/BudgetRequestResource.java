@@ -1,6 +1,7 @@
 package br.com.uatz.api.resource;
 
 import br.com.uatz.api.dto.budget.BudgetRequestCreateRequest;
+import br.com.uatz.api.dto.budget.BudgetRequestReviewRequest;
 import br.com.uatz.api.dto.budget.BudgetRequestResponse;
 import br.com.uatz.api.dto.budget.BudgetRequestVendorResponse;
 import br.com.uatz.api.mapper.BudgetRequestVendorApiMapper;
@@ -12,6 +13,7 @@ import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -44,6 +46,13 @@ public class BudgetRequestResource {
     public Response create(@Valid BudgetRequestCreateRequest request) {
         BudgetRequestResponse response = budgetRequestService.create(request);
         return Response.status(Response.Status.CREATED).entity(response).build();
+    }
+
+    @PUT
+    @Path("/{id}")
+    @RolesAllowed({"ADMIN", "OPERATOR"})
+    public BudgetRequestResponse review(@PathParam("id") Long id, @Valid BudgetRequestReviewRequest request) {
+        return budgetRequestService.review(id, request);
     }
 
     @GET
