@@ -1,0 +1,173 @@
+====================================================================================
+ITENS FALTANTES - Plataforma de Orcamentos via WhatsApp
+Levantado em 05/08/2026, cruzando context/PROJECT_CONTEXT.md +
+context/roadmap_desenvolvimento_orcamentos_whatsapp.pdf com o codigo dos repos
+uatz-server, uatz-model, uatz-migration e uatz-web (branch main).
+
+Como usar: troque [ ] por [x] quando concluir. Mantenha a linha de evidencia
+(arquivo:linha) para quem pegar o item depois.
+====================================================================================
+
+JA CONCLUIDO (nao entra na lista, so para referencia)
+  Etapa 1 - Planejamento e estrutura inicial
+  Etapa 2 - Backend basico (entidades, JWT, APIs, modulos)
+  Etapa 4 - Painel web do fornecedor (login, lista, resposta, recibo)
+
+
+------------------------------------------------------------------------------------
+PRIORIDADE 1 - QUICK WINS (destravam a etapa 5 e custam pouco)
+------------------------------------------------------------------------------------
+
+[ ] F1.1  Vincular item a produto na tela de revisao (triagem)
+          Hoje o front manda productId fixo em null, entao nenhum pedido carrega
+          produto - e sem produto o dispatch nao consegue filtrar fornecedor.
+          O backend JA aceita productId em BudgetItemRequest e resolve o produto.
+          Falta: select de produto (API products/categories ja existe) no formulario
+          de revisao e enviar o id escolhido.
+          - uatz-web: detalhe-orcamento.component.ts:180 (productId: null)
+          - uatz-server: BudgetRequestServiceImpl.java (resolveProduct, ~206)
+
+[ ] F1.2  Parser tentar casar o item com um produto existente
+          O parser cria todo item com productId null.
+          - uatz-server: BudgetRequestServiceImpl.java:279 e :283
+
+[ ] F1.3  Filtrar fornecedor por cidade/estado no dispatch
+          O pedido tem city e o fornecedor tem city/state, mas a elegibilidade
+          ignora as duas coisas. O objetivo declarado e "marketplace regional".
+          - uatz-server: BudgetRequestDistributionServiceImpl.java:65-72
+
+[ ] F1.4  Definir a regra quando nao ha fornecedor elegivel apos os filtros
+          Hoje estoura NENHUM_FORNECEDOR_ELEGIVEL (409). Decidir se relaxa o
+          filtro (cidade -> estado -> todos) ou se avisa o operador na tela.
+
+
+------------------------------------------------------------------------------------
+PRIORIDADE 2 - ETAPA 6: FECHAR O CICLO COM O CLIENTE
+(consolidacao existe; envio nao existe. MessageDirection.OUT nao e usado em
+lugar nenhum do uatz-server)
+------------------------------------------------------------------------------------
+
+[ ] F2.1  Interface WhatsAppGateway (abstrair o transporte)
+          Duas implementacoes: dev (persiste a Message OUT e loga) e producao
+          (Cloud API). Assim a etapa 3 nao fica bloqueada por aprovacao da Meta.
+
+[ ] F2.2  Servico que monta o resumo de orcamentos do pedido
+          Reaproveitar VendorQuoteSummaryResponse (menor/media/maior/melhor).
+
+[ ] F2.3  Persistir a mensagem enviada com direction = OUT
+          Model, enum e repositorio ja existem (Message, MessageDirection.OUT).
+
+[ ] F2.4  Acao "Enviar resumo ao cliente" no painel (admin/operador)
+          Endpoint + botao na tela de detalhe do pedido.
+
+[ ] F2.5  Encerrar o pedido em CLOSED apos o envio
+          BudgetRequestStatus.CLOSED existe e nunca e atingido hoje.
+
+[ ] F2.6  Definir o gatilho do envio
+          Manual pelo operador, por quantidade minima de cotacoes, ou por prazo.
+
+
+------------------------------------------------------------------------------------
+PRIORIDADE 3 - ETAPA 3: INTEGRACAO WHATSAPP REAL
+(a parte de dominio ja esta pronta: createFromWhatsAppSimulation acha/cria o
+Client, grava Conversation + Message IN, roda o parser e cria o pedido.
+Falta somente o transporte e a borda HTTP)
+------------------------------------------------------------------------------------
+
+[ ] F3.1  Conta Meta business, numero verificado e app da WhatsApp Cloud API
+          Pre-requisito externo, comecar cedo por causa do tempo de aprovacao.
+
+[ ] F3.2  Configuracao: token, phone number id e verify token
+          Via env vars, no padrao ja usado em application.properties.
+
+[ ] F3.3  REST Client da Graph API para envio de mensagem
+
+[ ] F3.4  GET /api/whatsapp/webhook - verificacao (hub.challenge)
+          Precisa ser publico (@PermitAll), como o AuthControllerImpl.
+
+[ ] F3.5  POST /api/whatsapp/webhook - recebimento
+          Validar X-Hub-Signature-256 antes de processar.
+
+[ ] F3.6  Mapear o payload da Cloud API para o pipeline que ja existe
+          Renomear createFromWhatsAppSimulation para algo neutro
+          (ex.: createFromInboundMessage) e ter os dois caminhos entrando nele.
+          - uatz-server: BudgetRequestServiceImpl.java:98
+
+[ ] F3.7  Idempotencia por id de mensagem do WhatsApp
+          A Meta reenvia webhook; hoje cada POST criaria um pedido novo.
+
+[ ] F3.8  Manter POST whatsapp/simulations funcionando para dev e testes
+          E hoje a unica porta de entrada; nao remover ao ligar o webhook.
+
+[ ] F3.9  HTTPS publico para o ambiente de desenvolvimento (tunel)
+
+
+------------------------------------------------------------------------------------
+PRIORIDADE 4 - ETAPA 5: RESTO DA DISTRIBUICAO
+------------------------------------------------------------------------------------
+
+[ ] F4.1  Distribuicao automatica ao criar o pedido
+          Hoje o dispatch e sempre manual (botao "Distribuir pedido" do admin).
+          Roadmap pede "enviar automaticamente para vendedores da categoria".
+
+[ ] F4.2  Notificar o fornecedor de que existe pedido novo
+          Nada avisa o fornecedor hoje - ele precisa abrir o painel e olhar.
+
+
+------------------------------------------------------------------------------------
+DEPOIS (etapas 7 a 10, nada iniciado)
+------------------------------------------------------------------------------------
+
+[ ] F5.1  Etapa 7 - historico de precos
+[ ] F5.2  Etapa 7 - relatorio de media de precos
+[ ] F5.3  Etapa 7 - tempo de resposta do fornecedor
+          (viewedAt e respondedAt ja sao gravados, falta o relatorio)
+[ ] F5.4  Etapa 8 - sugestao automatica de produtos
+[ ] F5.5  Etapa 8 - notificacoes para fornecedores
+[ ] F5.6  Etapa 9 - Redis para cache
+[ ] F5.7  Etapa 9 - filas de processamento
+[ ] F5.8  Etapa 9 - preparar separacao em microservicos
+[ ] F5.9  Etapa 10 - multiplas categorias
+[ ] F5.10 Etapa 10 - multiplas cidades e regioes
+[ ] F5.11 Etapa 10 - IA para interpretar mensagens
+[ ] F5.12 Etapa 10 - marketplace regional de comparacao de precos
+[ ] F5.13 WebSocket para tempo real (consta na stack do PROJECT_CONTEXT,
+          nao aparece no roadmap nem no codigo)
+
+
+------------------------------------------------------------------------------------
+DIVIDA TECNICA / OBSERVACOES
+------------------------------------------------------------------------------------
+
+[ ] D1  finalize inocuo no DetalheOrcamentoComponent
+        O finalize esta pendurado no route.paramMap, que nunca completa, entao
+        flagCarregando fica true para sempre. Hoje e inofensivo porque o template
+        nao le o flag, e a view so renderiza porque o valueChanges do FormArray
+        chama markForCheck por acidente. Mesmo defeito que deixou a tela
+        cotacao-enviada em branco (corrigido em 05/08/2026).
+        - uatz-web: detalhe-orcamento.component.ts:329
+
+[ ] D2  Nao existe usuario semeado no banco
+        O primeiro admin sai de POST auth/bootstrap, que se autotranca quando a
+        tabela users deixa de estar vazia. Documentar isso no README de setup.
+        - uatz-server: AuthServiceImpl.java:33
+
+[ ] D3  Exemplo "Create Vendor" da collection do Postman esta sem password
+        Como a senha e obrigatoria na criacao, a requisicao como esta da 400.
+        - uatz-server: postman/uatz-local.postman_collection.json:488
+
+[ ] D4  Sem testes automatizados no fluxo de orcamento
+        Avaliar cobertura minima para parser, dispatch e vendor-quotes.
+
+
+------------------------------------------------------------------------------------
+REFERENCIAS
+------------------------------------------------------------------------------------
+context/PROJECT_CONTEXT.md ................. visao de produto, modelo de dados
+context/roadmap_desenvolvimento_orcamentos_whatsapp.pdf .... 10 etapas
+uatz-server/CLAUDE.md ...................... padroes do backend
+uatz-web/CLAUDE.md ......................... padroes do frontend
+
+Ordem recomendada: P1 -> P2 -> P3 -> P4 -> depois.
+A etapa 6 vem antes da 3 de proposito: fechar o ciclo ate o cliente e o que
+transforma o que ja existe em MVP demonstravel e nao depende da Meta.
