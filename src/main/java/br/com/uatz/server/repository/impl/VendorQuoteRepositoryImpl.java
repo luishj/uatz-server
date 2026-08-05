@@ -28,6 +28,11 @@ public class VendorQuoteRepositoryImpl extends GenericRepositoryImpl<VendorQuote
     }
 
     @Override
+    public Optional<VendorQuote> findByRequestIdAndOptionNumber(Long requestId, Integer optionNumber) {
+        return find("request.id = ?1 and optionNumber = ?2", requestId, optionNumber).firstResultOptional();
+    }
+
+    @Override
     public List<VendorQuote> findByRequestId(Long requestId) {
         return find("request.id", requestId).list();
     }

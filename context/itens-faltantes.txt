@@ -43,28 +43,50 @@ PRIORIDADE 1 - QUICK WINS (destravam a etapa 5 e custam pouco)
 
 ------------------------------------------------------------------------------------
 PRIORIDADE 2 - ETAPA 6: FECHAR O CICLO COM O CLIENTE
-(consolidacao existe; envio nao existe. MessageDirection.OUT nao e usado em
-lugar nenhum do uatz-server)
+(fluxo do servidor implementado em 05/08/2026: lista numerada -> escolha do
+cliente -> fechamento -> liberacao dos contatos -> link de conversa)
 ------------------------------------------------------------------------------------
 
-[ ] F2.1  Interface WhatsAppGateway (abstrair o transporte)
-          Duas implementacoes: dev (persiste a Message OUT e loga) e producao
-          (Cloud API). Assim a etapa 3 nao fica bloqueada por aprovacao da Meta.
+[x] F2.1  Interface WhatsAppGateway (abstrair o transporte)
+          service/WhatsAppGateway.java + service/impl/WhatsAppGatewayImpl.java
+          (a impl atual so loga; a Cloud API entra trocando o bean)
 
-[ ] F2.2  Servico que monta o resumo de orcamentos do pedido
-          Reaproveitar VendorQuoteSummaryResponse (menor/media/maior/melhor).
+[x] F2.2  Servico que monta a lista de orcamentos do pedido
+          BudgetRequestClosingServiceImpl.sendQuoteOptions - numera as cotacoes
+          por menor total e monta o texto em WhatsAppMessageUtil
 
-[ ] F2.3  Persistir a mensagem enviada com direction = OUT
-          Model, enum e repositorio ja existem (Message, MessageDirection.OUT).
+[x] F2.3  Persistir a mensagem enviada com direction = OUT
+          BudgetRequestClosingServiceImpl.sendToClient; a conversa e a do pedido
+          (budget_requests.conversation_id) ou a ultima do cliente
 
-[ ] F2.4  Acao "Enviar resumo ao cliente" no painel (admin/operador)
-          Endpoint + botao na tela de detalhe do pedido.
+[x] F2.5  Encerrar o pedido em CLOSED apos a escolha
+          selectOption grava selected_quote_id + closed_at e move para CLOSED
 
-[ ] F2.5  Encerrar o pedido em CLOSED apos o envio
-          BudgetRequestStatus.CLOSED existe e nunca e atingido hoje.
+[x] F2.6  Gatilho do envio: manual pelo operador
+          POST /{id}/quote-options e POST /{id}/selection (ADMIN/OPERATOR)
 
-[ ] F2.6  Definir o gatilho do envio
-          Manual pelo operador, por quantidade minima de cotacoes, ou por prazo.
+[ ] F2.4  Front: tela de fechamento no painel
+          Botoes "Enviar orcamentos ao cliente" e "Registrar escolha", exibicao
+          do contato liberado e do link de conversa. Backend pronto:
+          - POST budget-requests/{id}/quote-options
+          - POST budget-requests/{id}/selection   { "optionNumber": 2 }
+          - GET  budget-requests/{id}/selection
+
+[ ] F2.7  Front: DTOs novos do pedido
+          BudgetRequestResponse ganhou quotesSentAt, closedAt, selectedQuoteId e
+          selectedVendorId; clientPhone agora vem nulo para fornecedor que nao
+          foi escolhido.
+
+[ ] F2.8  Decidir o comportamento em reenvio da lista
+          sendQuoteOptions renumera todas as cotacoes a cada chamada. Se chegar
+          cotacao nova e a lista for reenviada, um "2" respondido sobre a lista
+          antiga aponta para outro fornecedor. Opcoes: travar reenvio, versionar
+          a lista, ou casar a resposta com a mensagem enviada.
+
+[ ] F2.9  Idempotencia da escolha
+          Hoje uma segunda chamada de selectOption devolve 409 PEDIDO_JA_FECHADO.
+          Confirmar se e esse o comportamento desejado quando o cliente responde
+          duas vezes no WhatsApp.
 
 
 ------------------------------------------------------------------------------------
@@ -92,6 +114,11 @@ Falta somente o transporte e a borda HTTP)
           Renomear createFromWhatsAppSimulation para algo neutro
           (ex.: createFromInboundMessage) e ter os dois caminhos entrando nele.
           - uatz-server: BudgetRequestServiceImpl.java:98
+
+[ ] F3.10 Webhook interpretar a resposta numerica do cliente
+          Quando a mensagem recebida for so um numero e o pedido tiver
+          quotes_sent_at, chamar BudgetRequestClosingService.selectOption em vez
+          de abrir um pedido novo.
 
 [ ] F3.7  Idempotencia por id de mensagem do WhatsApp
           A Meta reenvia webhook; hoje cada POST criaria um pedido novo.

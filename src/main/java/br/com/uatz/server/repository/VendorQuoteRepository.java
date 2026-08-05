@@ -12,6 +12,8 @@ public interface VendorQuoteRepository extends GenericRepository<VendorQuote, Lo
 
     Optional<VendorQuote> findByRequestIdAndVendorId(Long requestId, Long vendorId);
 
+    Optional<VendorQuote> findByRequestIdAndOptionNumber(Long requestId, Integer optionNumber);
+
     List<VendorQuote> findByRequestId(Long requestId);
 
     List<VendorQuote> findByVendorId(Long vendorId);

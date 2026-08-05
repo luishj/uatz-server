@@ -1,8 +1,11 @@
 package br.com.uatz.server.api;
 
 import br.com.uatz.server.dto.budget.BudgetRequestCreateRequest;
+import br.com.uatz.server.dto.budget.BudgetRequestQuoteOptionsResponse;
 import br.com.uatz.server.dto.budget.BudgetRequestResponse;
 import br.com.uatz.server.dto.budget.BudgetRequestReviewRequest;
+import br.com.uatz.server.dto.budget.BudgetRequestSelectionRequest;
+import br.com.uatz.server.dto.budget.BudgetRequestSelectionResponse;
 import br.com.uatz.server.dto.budget.BudgetRequestVendorResponse;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.validation.Valid;
@@ -52,4 +55,16 @@ public interface BudgetRequestController {
     @POST
     @Path("/{id}/decline")
     public abstract Response decline(@PathParam("id") Long id);
+
+    @POST
+    @Path("/{id}/quote-options")
+    public abstract BudgetRequestQuoteOptionsResponse sendQuoteOptions(@PathParam("id") Long id);
+
+    @POST
+    @Path("/{id}/selection")
+    public abstract BudgetRequestSelectionResponse selectQuote(@PathParam("id") Long id, @Valid BudgetRequestSelectionRequest request);
+
+    @GET
+    @Path("/{id}/selection")
+    public abstract BudgetRequestSelectionResponse findSelection(@PathParam("id") Long id);
 }

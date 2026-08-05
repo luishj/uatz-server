@@ -12,6 +12,7 @@ import br.com.uatz.model.Client;
 import br.com.uatz.model.Conversation;
 import br.com.uatz.model.Message;
 import br.com.uatz.model.Product;
+import br.com.uatz.model.Vendor;
 import br.com.uatz.model.enumerador.BudgetRequestStatus;
 import br.com.uatz.model.enumerador.MessageDirection;
 import br.com.uatz.model.enumerador.StatusType;
@@ -22,6 +23,7 @@ import br.com.uatz.server.repository.ConversationRepository;
 import br.com.uatz.server.repository.MessageRepository;
 import br.com.uatz.server.repository.ProductRepository;
 import br.com.uatz.server.repository.StatusRepository;
+import br.com.uatz.server.repository.VendorRepository;
 import br.com.uatz.server.service.BudgetRequestDistributionService;
 import br.com.uatz.server.service.BudgetRequestService;
 import br.com.uatz.server.exception.CloudMessage;
@@ -45,6 +47,7 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
     private final MessageRepository messageRepository;
     private final ProductRepository productRepository;
     private final StatusRepository statusRepository;
+    private final VendorRepository vendorRepository;
     private final BudgetRequestDistributionService budgetRequestDistributionService;
 
     public BudgetRequestServiceImpl(
@@ -55,6 +58,7 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
             MessageRepository messageRepository,
             ProductRepository productRepository,
             StatusRepository statusRepository,
+            VendorRepository vendorRepository,
             BudgetRequestDistributionService budgetRequestDistributionService
     ) {
         this.budgetRequestRepository = budgetRequestRepository;
@@ -64,6 +68,7 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
         this.messageRepository = messageRepository;
         this.productRepository = productRepository;
         this.statusRepository = statusRepository;
+        this.vendorRepository = vendorRepository;
         this.budgetRequestDistributionService = budgetRequestDistributionService;
     }
 
@@ -88,7 +93,7 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
         Client client = clientRepository.findOptionalById(request.clientId())
                 .orElseThrow(() -> MessageBuilder.build(CloudMessage.CLIENTE_NAO_ENCONTRADO, Status.NOT_FOUND));
 
-        BudgetRequest budgetRequest = createBudgetRequestBase(client, request.city(), null, null);
+        BudgetRequest budgetRequest = createBudgetRequestBase(client, request.city(), null, null, null);
         List<BudgetItem> items = persistItems(budgetRequest, request.items());
         return BudgetRequestMapping.toResponse(budgetRequest, items);
     }
@@ -113,7 +118,7 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
         message.setCreatedAt(LocalDateTime.now());
         messageRepository.save(message);
 
-        BudgetRequest budgetRequest = createBudgetRequestBase(client, request.city(), "WHATSAPP", request.message());
+        BudgetRequest budgetRequest = createBudgetRequestBase(client, request.city(), "WHATSAPP", request.message(), conversation);
         List<BudgetItem> items = persistItems(budgetRequest, parseWhatsAppItems(request.message()));
         return BudgetRequestMapping.toResponse(budgetRequest, items);
     }
@@ -155,7 +160,14 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
             return Optional.empty();
         }
 
-        return findResponseById(id);
+        Long vendorId = resolveVendorId(vendorEmail);
+
+        return budgetRequestRepository.findOptionalById(id)
+                .map(budgetRequest -> BudgetRequestMapping.toVendorResponse(
+                        budgetRequest,
+                        budgetItemRepository.findByRequestId(budgetRequest.getId()),
+                        vendorId
+                ));
     }
 
     @Override
@@ -177,14 +189,23 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
             return List.of();
         }
 
+        Long vendorId = resolveVendorId(vendorEmail);
+
         return budgetRequestRepository.listAllBudgetRequests()
                 .stream()
                 .filter(budgetRequest -> allowedRequestIds.contains(budgetRequest.getId()))
-                .map(budgetRequest -> BudgetRequestMapping.toResponse(
+                .map(budgetRequest -> BudgetRequestMapping.toVendorResponse(
                         budgetRequest,
-                        budgetItemRepository.findByRequestId(budgetRequest.getId())
+                        budgetItemRepository.findByRequestId(budgetRequest.getId()),
+                        vendorId
                 ))
                 .toList();
+    }
+
+    private Long resolveVendorId(String vendorEmail) {
+        return vendorRepository.findByEmail(vendorEmail)
+                .map(Vendor::getId)
+                .orElse(null);
     }
 
     private BudgetItem createItem(BudgetRequest budgetRequest, BudgetItemRequest request) {
@@ -206,12 +227,13 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
                 .orElseThrow(() -> MessageBuilder.build(CloudMessage.PRODUTO_NAO_ENCONTRADO, Status.NOT_FOUND));
     }
 
-    private BudgetRequest createBudgetRequestBase(Client client, String city, String sourceChannel, String sourceMessage) {
+    private BudgetRequest createBudgetRequestBase(Client client, String city, String sourceChannel, String sourceMessage, Conversation conversation) {
         BudgetRequest budgetRequest = new BudgetRequest();
         budgetRequest.setClient(client);
         budgetRequest.setCity(city);
         budgetRequest.setSourceChannel(sourceChannel);
         budgetRequest.setSourceMessage(sourceMessage);
+        budgetRequest.setConversation(conversation);
         budgetRequest.setStatusEntity(statusRepository.findByTypeAndCode(StatusType.BUDGET_REQUEST, BudgetRequestStatus.OPEN.name())
                 .orElseThrow(() -> MessageBuilder.build(CloudMessage.SITUACAO_NAO_ENCONTRADA, Status.INTERNAL_SERVER_ERROR)));
         budgetRequest.setCreatedAt(LocalDateTime.now());

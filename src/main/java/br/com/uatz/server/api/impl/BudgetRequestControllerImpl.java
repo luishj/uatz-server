@@ -3,12 +3,16 @@ package br.com.uatz.server.api.impl;
 import br.com.uatz.server.api.BudgetRequestController;
 import br.com.uatz.server.constante.Perfil;
 import br.com.uatz.server.dto.budget.BudgetRequestCreateRequest;
+import br.com.uatz.server.dto.budget.BudgetRequestQuoteOptionsResponse;
 import br.com.uatz.server.dto.budget.BudgetRequestResponse;
 import br.com.uatz.server.dto.budget.BudgetRequestReviewRequest;
+import br.com.uatz.server.dto.budget.BudgetRequestSelectionRequest;
+import br.com.uatz.server.dto.budget.BudgetRequestSelectionResponse;
 import br.com.uatz.server.dto.budget.BudgetRequestVendorResponse;
 import br.com.uatz.server.exception.CloudMessage;
 import br.com.uatz.server.exception.MessageBuilder;
 import br.com.uatz.server.mapping.BudgetRequestVendorMapping;
+import br.com.uatz.server.service.BudgetRequestClosingService;
 import br.com.uatz.server.service.BudgetRequestDistributionService;
 import br.com.uatz.server.service.BudgetRequestService;
 import jakarta.annotation.security.RolesAllowed;
@@ -25,6 +29,9 @@ public class BudgetRequestControllerImpl implements BudgetRequestController {
 
     @Inject
     BudgetRequestDistributionService budgetRequestDistributionService;
+
+    @Inject
+    BudgetRequestClosingService budgetRequestClosingService;
 
     @Inject
     JsonWebToken jsonWebToken;
@@ -94,6 +101,26 @@ public class BudgetRequestControllerImpl implements BudgetRequestController {
     public Response decline(Long id) {
         budgetRequestDistributionService.markDeclined(id, jsonWebToken.getName());
         return Response.noContent().build();
+    }
+
+    @Override
+    @RolesAllowed({Perfil.ADMIN, Perfil.OPERATOR})
+    public BudgetRequestQuoteOptionsResponse sendQuoteOptions(Long id) {
+        return budgetRequestClosingService.sendQuoteOptions(id);
+    }
+
+    @Override
+    @RolesAllowed({Perfil.ADMIN, Perfil.OPERATOR})
+    public BudgetRequestSelectionResponse selectQuote(Long id, BudgetRequestSelectionRequest request) {
+        return budgetRequestClosingService.selectOption(id, request.optionNumber());
+    }
+
+    @Override
+    @RolesAllowed({Perfil.ADMIN, Perfil.OPERATOR, Perfil.VENDOR})
+    public BudgetRequestSelectionResponse findSelection(Long id) {
+        return isVendor()
+                ? budgetRequestClosingService.findSelectionForVendor(id, jsonWebToken.getName())
+                : budgetRequestClosingService.findSelection(id);
     }
 
     private boolean isVendor() {

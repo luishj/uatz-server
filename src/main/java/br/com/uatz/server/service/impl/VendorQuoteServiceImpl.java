@@ -8,6 +8,7 @@ import br.com.uatz.model.BudgetRequest;
 import br.com.uatz.model.Vendor;
 import br.com.uatz.model.VendorQuote;
 import br.com.uatz.model.VendorQuoteItem;
+import br.com.uatz.model.enumerador.BudgetRequestStatus;
 import br.com.uatz.model.enumerador.BudgetRequestVendorStatus;
 import br.com.uatz.server.repository.BudgetItemRepository;
 import br.com.uatz.server.repository.BudgetRequestRepository;
@@ -59,6 +60,10 @@ public class VendorQuoteServiceImpl implements VendorQuoteService {
     public VendorQuote create(VendorQuoteRequest request) {
         BudgetRequest budgetRequest = budgetRequestRepository.findOptionalById(request.requestId())
                 .orElseThrow(() -> MessageBuilder.build(CloudMessage.PEDIDO_NAO_ENCONTRADO, Status.NOT_FOUND));
+
+        if (budgetRequest.getStatus() == BudgetRequestStatus.CLOSED) {
+            throw MessageBuilder.build(CloudMessage.PEDIDO_JA_FECHADO, Status.CONFLICT);
+        }
 
         Vendor vendor = vendorRepository.findOptionalById(request.vendorId())
                 .orElseThrow(() -> MessageBuilder.build(CloudMessage.FORNECEDOR_NAO_ENCONTRADO, Status.NOT_FOUND));
