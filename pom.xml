@@ -12,6 +12,7 @@
 
     <properties>
         <compiler-plugin.version>3.13.0</compiler-plugin.version>
+        <maven.compiler.parameters>true</maven.compiler.parameters>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -19,6 +20,11 @@
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.version>3.15.1</quarkus.platform.version>
         <surefire-plugin.version>3.3.1</surefire-plugin.version>
+        <!-- Others -->
+        <dependency.version.lombok>1.18.34</dependency.version.lombok>
+        <dependency.version.mapstruct>1.5.5.Final</dependency.version.mapstruct>
+        <dependency.uatz-model>0.0.1-SNAPSHOT</dependency.uatz-model>
+        <version.jbcrypt>0.4</version.jbcrypt>
     </properties>
 
     <dependencyManagement>
@@ -68,17 +74,36 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-hibernate-validator</artifactId>
+            <artifactId>quarkus-smallrye-health</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-flyway</artifactId>
+            <artifactId>quarkus-hibernate-validator</artifactId>
+        </dependency>
+
+        <!-- Projetos internos UATZ -->
+        <dependency>
+            <groupId>br.com.uatz</groupId>
+            <artifactId>uatz-model</artifactId>
+            <version>${dependency.uatz-model}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+            <version>${dependency.version.mapstruct}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${dependency.version.lombok}</version>
         </dependency>
         <dependency>
             <groupId>org.mindrot</groupId>
             <artifactId>jbcrypt</artifactId>
-            <version>0.4</version>
+            <version>${version.jbcrypt}</version>
         </dependency>
+
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit5</artifactId>
@@ -112,13 +137,67 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${compiler-plugin.version}</version>
                 <configuration>
-                    <parameters>true</parameters>
+                    <parameters>${maven.compiler.parameters}</parameters>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${dependency.version.lombok}</version>
+                        </path>
+                        <path>
+                            <groupId>org.mapstruct</groupId>
+                            <artifactId>mapstruct-processor</artifactId>
+                            <version>${dependency.version.mapstruct}</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${surefire-plugin.version}</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                        <maven.home>${maven.home}</maven.home>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>${surefire-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <native.image.path>${project.build.directory}/${project.build.finalName}-runner</native.image.path>
+                                <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                                <maven.home>${maven.home}</maven.home>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Generate microservice native(GraalVM) -->
+        <profile>
+            <id>native</id>
+            <activation>
+                <property>
+                    <name>native</name>
+                </property>
+            </activation>
+            <properties>
+                <skipITs>false</skipITs>
+                <quarkus.native.enabled>true</quarkus.native.enabled>
+            </properties>
+        </profile>
+    </profiles>
+
 </project>
