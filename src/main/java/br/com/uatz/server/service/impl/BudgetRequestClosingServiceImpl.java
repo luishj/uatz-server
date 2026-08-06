@@ -1,14 +1,11 @@
 package br.com.uatz.server.service.impl;
 
 import br.com.uatz.model.BudgetRequest;
-import br.com.uatz.model.Client;
 import br.com.uatz.model.Conversation;
-import br.com.uatz.model.Message;
 import br.com.uatz.model.StatusEntity;
 import br.com.uatz.model.Vendor;
 import br.com.uatz.model.VendorQuote;
 import br.com.uatz.model.enumerador.BudgetRequestStatus;
-import br.com.uatz.model.enumerador.MessageDirection;
 import br.com.uatz.model.enumerador.StatusType;
 import br.com.uatz.server.dto.budget.BudgetRequestQuoteOptionResponse;
 import br.com.uatz.server.dto.budget.BudgetRequestQuoteOptionsResponse;
@@ -17,12 +14,11 @@ import br.com.uatz.server.exception.CloudMessage;
 import br.com.uatz.server.exception.MessageBuilder;
 import br.com.uatz.server.mapping.BudgetRequestClosingMapping;
 import br.com.uatz.server.repository.BudgetRequestRepository;
-import br.com.uatz.server.repository.ConversationRepository;
-import br.com.uatz.server.repository.MessageRepository;
 import br.com.uatz.server.repository.StatusRepository;
 import br.com.uatz.server.repository.VendorQuoteRepository;
 import br.com.uatz.server.repository.VendorRepository;
 import br.com.uatz.server.service.BudgetRequestClosingService;
+import br.com.uatz.server.service.ConversationService;
 import br.com.uatz.server.service.WhatsAppGateway;
 import br.com.uatz.server.util.WhatsAppMessageUtil;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -36,32 +32,27 @@ import java.util.List;
 @ApplicationScoped
 public class BudgetRequestClosingServiceImpl implements BudgetRequestClosingService {
 
-    private static final String CANAL_WHATSAPP = "WHATSAPP";
-
     private final BudgetRequestRepository budgetRequestRepository;
     private final VendorQuoteRepository vendorQuoteRepository;
-    private final ConversationRepository conversationRepository;
-    private final MessageRepository messageRepository;
     private final StatusRepository statusRepository;
     private final VendorRepository vendorRepository;
     private final WhatsAppGateway whatsAppGateway;
+    private final ConversationService conversationService;
 
     public BudgetRequestClosingServiceImpl(
             BudgetRequestRepository budgetRequestRepository,
             VendorQuoteRepository vendorQuoteRepository,
-            ConversationRepository conversationRepository,
-            MessageRepository messageRepository,
             StatusRepository statusRepository,
             VendorRepository vendorRepository,
-            WhatsAppGateway whatsAppGateway
+            WhatsAppGateway whatsAppGateway,
+            ConversationService conversationService
     ) {
         this.budgetRequestRepository = budgetRequestRepository;
         this.vendorQuoteRepository = vendorQuoteRepository;
-        this.conversationRepository = conversationRepository;
-        this.messageRepository = messageRepository;
         this.statusRepository = statusRepository;
         this.vendorRepository = vendorRepository;
         this.whatsAppGateway = whatsAppGateway;
+        this.conversationService = conversationService;
     }
 
     @Override
@@ -210,18 +201,12 @@ public class BudgetRequestClosingServiceImpl implements BudgetRequestClosingServ
      */
     private void sendToClient(BudgetRequest budgetRequest, String text) {
         whatsAppGateway.sendMessage(budgetRequest.getClient().getPhone(), text);
-
-        Message message = new Message();
-        message.setConversation(resolveConversation(budgetRequest));
-        message.setDirection(MessageDirection.OUT);
-        message.setMessage(text);
-        message.setCreatedAt(LocalDateTime.now());
-        messageRepository.save(message);
+        conversationService.registerOutbound(resolveConversation(budgetRequest), text);
     }
 
     /**
      * Conversa em que as mensagens de saída são gravadas. Pedidos criados sem
-     * WhatsApp (pelo painel) não têm conversa, então ela é criada na primeira
+     * WhatsApp (pelo painel) não têm conversa, então ela é vinculada na primeira
      * mensagem enviada.
      */
     private Conversation resolveConversation(BudgetRequest budgetRequest) {
@@ -229,21 +214,10 @@ public class BudgetRequestClosingServiceImpl implements BudgetRequestClosingServ
             return budgetRequest.getConversation();
         }
 
-        Client client = budgetRequest.getClient();
-        Conversation conversation = conversationRepository.findLastByClientId(client.getId())
-                .orElseGet(() -> createConversation(client));
-
+        Conversation conversation = conversationService.resolveConversation(budgetRequest.getClient());
         budgetRequest.setConversation(conversation);
         budgetRequestRepository.save(budgetRequest);
         return conversation;
-    }
-
-    private Conversation createConversation(Client client) {
-        Conversation conversation = new Conversation();
-        conversation.setClient(client);
-        conversation.setChannel(CANAL_WHATSAPP);
-        conversation.setCreatedAt(LocalDateTime.now());
-        return conversationRepository.save(conversation);
     }
 
     private BudgetRequest findBudgetRequest(Long requestId) {

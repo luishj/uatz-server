@@ -74,6 +74,19 @@ public final class WhatsAppMessageUtil {
 	}
 
 	/**
+	 * Resposta ao cliente que respondeu um número que não existe na lista de
+	 * opções enviada.
+	 */
+	public static String montarMensagemOpcaoInvalida(Long codigoPedido, Integer opcao) {
+		return new StringBuilder()
+				.append("Não encontrei a opção ").append(opcao)
+				.append(" no pedido #").append(codigoPedido).append(".")
+				.append(QUEBRA_LINHA)
+				.append("Responda com o número de uma das opções que enviamos.")
+				.toString();
+	}
+
+	/**
 	 * Texto que o fornecedor usa quando é ele quem inicia a conversa.
 	 */
 	public static String montarTextoFornecedorParaCliente(Long codigoPedido, String nomeFornecedor) {
@@ -126,7 +139,11 @@ public final class WhatsAppMessageUtil {
 		return quantidade.stripTrailingZeros().toPlainString();
 	}
 
-	private static String somenteDigitos(String telefone) {
+	/**
+	 * Telefone no formato aceito pela Cloud API e pelo link wa.me: só dígitos,
+	 * já com o código do país.
+	 */
+	public static String somenteDigitos(String telefone) {
 		if (StringUtil.isNullOrEmpty(telefone)) {
 			return StringUtil.STRING_VAZIA;
 		}

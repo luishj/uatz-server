@@ -10,22 +10,19 @@ import br.com.uatz.model.BudgetItem;
 import br.com.uatz.model.BudgetRequest;
 import br.com.uatz.model.Client;
 import br.com.uatz.model.Conversation;
-import br.com.uatz.model.Message;
 import br.com.uatz.model.Product;
 import br.com.uatz.model.Vendor;
 import br.com.uatz.model.enumerador.BudgetRequestStatus;
-import br.com.uatz.model.enumerador.MessageDirection;
 import br.com.uatz.model.enumerador.StatusType;
 import br.com.uatz.server.repository.BudgetItemRepository;
 import br.com.uatz.server.repository.BudgetRequestRepository;
 import br.com.uatz.server.repository.ClientRepository;
-import br.com.uatz.server.repository.ConversationRepository;
-import br.com.uatz.server.repository.MessageRepository;
 import br.com.uatz.server.repository.ProductRepository;
 import br.com.uatz.server.repository.StatusRepository;
 import br.com.uatz.server.repository.VendorRepository;
 import br.com.uatz.server.service.BudgetRequestDistributionService;
 import br.com.uatz.server.service.BudgetRequestService;
+import br.com.uatz.server.service.ConversationService;
 import br.com.uatz.server.exception.CloudMessage;
 import br.com.uatz.server.exception.MessageBuilder;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -40,36 +37,35 @@ import java.util.Optional;
 @ApplicationScoped
 public class BudgetRequestServiceImpl implements BudgetRequestService {
 
+    private static final String CANAL_WHATSAPP = "WHATSAPP";
+
     private final BudgetRequestRepository budgetRequestRepository;
     private final BudgetItemRepository budgetItemRepository;
     private final ClientRepository clientRepository;
-    private final ConversationRepository conversationRepository;
-    private final MessageRepository messageRepository;
     private final ProductRepository productRepository;
     private final StatusRepository statusRepository;
     private final VendorRepository vendorRepository;
     private final BudgetRequestDistributionService budgetRequestDistributionService;
+    private final ConversationService conversationService;
 
     public BudgetRequestServiceImpl(
             BudgetRequestRepository budgetRequestRepository,
             BudgetItemRepository budgetItemRepository,
             ClientRepository clientRepository,
-            ConversationRepository conversationRepository,
-            MessageRepository messageRepository,
             ProductRepository productRepository,
             StatusRepository statusRepository,
             VendorRepository vendorRepository,
-            BudgetRequestDistributionService budgetRequestDistributionService
+            BudgetRequestDistributionService budgetRequestDistributionService,
+            ConversationService conversationService
     ) {
         this.budgetRequestRepository = budgetRequestRepository;
         this.budgetItemRepository = budgetItemRepository;
         this.clientRepository = clientRepository;
-        this.conversationRepository = conversationRepository;
-        this.messageRepository = messageRepository;
         this.productRepository = productRepository;
         this.statusRepository = statusRepository;
         this.vendorRepository = vendorRepository;
         this.budgetRequestDistributionService = budgetRequestDistributionService;
+        this.conversationService = conversationService;
     }
 
     @Override
@@ -99,27 +95,22 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
     }
 
     @Override
-    @Transactional
     public BudgetRequestResponse createFromWhatsAppSimulation(WhatsAppSimulationRequest request) {
-        Client client = clientRepository.findByPhone(request.phone())
-                .map(existing -> updateClientLocation(existing, request.city(), request.state()))
-                .orElseGet(() -> createClientFromSimulation(request));
+        return createFromWhatsAppMessage(request.phone(), request.city(), request.state(), request.message());
+    }
 
-        Conversation conversation = new Conversation();
-        conversation.setClient(client);
-        conversation.setChannel("WHATSAPP");
-        conversation.setCreatedAt(LocalDateTime.now());
-        conversationRepository.save(conversation);
+    @Override
+    @Transactional
+    public BudgetRequestResponse createFromWhatsAppMessage(String phone, String city, String state, String message) {
+        Client client = clientRepository.findByPhone(phone)
+                .map(existing -> updateClientLocation(existing, city, state))
+                .orElseGet(() -> createClient(phone, city, state));
 
-        Message message = new Message();
-        message.setConversation(conversation);
-        message.setDirection(MessageDirection.IN);
-        message.setMessage(request.message());
-        message.setCreatedAt(LocalDateTime.now());
-        messageRepository.save(message);
+        Conversation conversation = conversationService.resolveConversation(client);
+        conversationService.registerInbound(conversation, message);
 
-        BudgetRequest budgetRequest = createBudgetRequestBase(client, request.city(), "WHATSAPP", request.message(), conversation);
-        List<BudgetItem> items = persistItems(budgetRequest, parseWhatsAppItems(request.message()));
+        BudgetRequest budgetRequest = createBudgetRequestBase(client, city, CANAL_WHATSAPP, message, conversation);
+        List<BudgetItem> items = persistItems(budgetRequest, parseWhatsAppItems(message));
         return BudgetRequestMapping.toResponse(budgetRequest, items);
     }
 
@@ -251,11 +242,11 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
                 .toList();
     }
 
-    private Client createClientFromSimulation(WhatsAppSimulationRequest request) {
+    private Client createClient(String phone, String city, String state) {
         Client client = new Client();
-        client.setPhone(request.phone());
-        client.setCity(request.city());
-        client.setState(request.state());
+        client.setPhone(phone);
+        client.setCity(city);
+        client.setState(state);
         client.setCreatedAt(LocalDateTime.now());
         return clientRepository.save(client);
     }

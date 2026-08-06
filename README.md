@@ -38,6 +38,7 @@ src/main/java/br/com/uatz/server/
   api/impl/       implementações (@Inject dos services + @RolesAllowed)
   service/        regras de negócio (interface + impl/)
   repository/     acesso a dados (interface + impl/, sobre GenericRepository)
+  client/         clientes REST de APIs externas (@RegisterRestClient)
   dto/            records de request/response por domínio
   mapping/        conversão entidade <-> DTO
   vo/             objetos de valor de consulta
@@ -88,3 +89,37 @@ Subir a API (porta 8081):
 - Status: http://localhost:8081/api/status
 
 Variáveis de ambiente: `BASE` (host:porta/base), `USUARIO`, `SENHA`.
+
+## Integração com o WhatsApp
+
+O envio e o recebimento passam pela WhatsApp Cloud API. Com `whatsapp.enabled=false` (padrão) o
+envio só vai para o log, o que permite exercitar o fluxo inteiro sem número verificado.
+
+| Variável | Para que serve |
+|---|---|
+| `WHATSAPP_ENABLED` | `true` liga o envio pela Cloud API |
+| `WHATSAPP_VERIFY_TOKEN` | token combinado com a Meta no cadastro do webhook |
+| `WHATSAPP_APP_SECRET` | confere a assinatura das notificações recebidas |
+| `WHATSAPP_ACCESS_TOKEN` | token de acesso usado no envio |
+| `WHATSAPP_PHONE_NUMBER_ID` | id do número remetente |
+| `WHATSAPP_API_URL` | base da Graph API (padrão `https://graph.facebook.com/v21.0`) |
+
+Endpoints do webhook (públicos — quem chama é a Meta):
+
+- `GET /api/whatsapp/webhook` — verificação do cadastro da URL; devolve `hub.challenge` quando
+  `hub.verify_token` bate com `WHATSAPP_VERIFY_TOKEN`
+- `POST /api/whatsapp/webhook` — recebe as mensagens; exige a assinatura `X-Hub-Signature-256`
+  quando `WHATSAPP_APP_SECRET` está configurado
+
+Como a mensagem recebida é interpretada:
+
+- número isolado (`2`) **e** existe pedido do cliente com opções já enviadas e ainda aberto →
+  escolha da cotação, fechando o pedido
+- qualquer outro texto → novo pedido de orçamento, com os itens quebrados a partir das linhas
+
+Sem `WHATSAPP_APP_SECRET` a assinatura não é conferida e qualquer um consegue postar no webhook —
+é aceitável em desenvolvimento, não em produção. Cada notificação aceita sem conferência registra
+um aviso no log.
+
+Sem expor a aplicação na internet, o `POST /api/whatsapp/simulations` (perfis ADMIN/OPERATOR)
+injeta uma mensagem pelo mesmo caminho de negócio.

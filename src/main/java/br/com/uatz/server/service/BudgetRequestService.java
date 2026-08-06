@@ -20,6 +20,14 @@ public interface BudgetRequestService {
 
     BudgetRequestResponse createFromWhatsAppSimulation(WhatsAppSimulationRequest request);
 
+    /**
+     * Cria o pedido a partir de uma mensagem de WhatsApp: resolve o cliente pelo
+     * telefone, registra a mensagem na conversa e quebra o texto em itens. A
+     * cidade e o estado são opcionais porque a Cloud API não os informa — o
+     * operador completa depois pelo endpoint de revisão.
+     */
+    BudgetRequestResponse createFromWhatsAppMessage(String phone, String city, String state, String message);
+
     BudgetRequestResponse review(Long id, BudgetRequestReviewRequest request);
 
     Optional<BudgetRequestResponse> findResponseById(Long id);

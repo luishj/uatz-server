@@ -36,6 +36,14 @@
     {
       "key": "vendorQuoteId",
       "value": ""
+    },
+    {
+      "key": "whatsappVerifyToken",
+      "value": ""
+    },
+    {
+      "key": "whatsappSignature",
+      "value": ""
     }
   ],
   "item": [
@@ -831,6 +839,106 @@
                 "vendor-quotes",
                 "vendor",
                 "{{vendorId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "WhatsApp",
+      "item": [
+        {
+          "name": "Simulate Inbound Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"5511988887777\",\n  \"city\": \"Curitiba\",\n  \"state\": \"PR\",\n  \"message\": \"10 sacos de cimento\\n100 tijolos\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/whatsapp/simulations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "whatsapp",
+                "simulations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify Webhook",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token={{whatsappVerifyToken}}&hub.challenge=12345",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "whatsapp",
+                "webhook"
+              ],
+              "query": [
+                {
+                  "key": "hub.mode",
+                  "value": "subscribe"
+                },
+                {
+                  "key": "hub.verify_token",
+                  "value": "{{whatsappVerifyToken}}"
+                },
+                {
+                  "key": "hub.challenge",
+                  "value": "12345"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Receive Webhook Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Hub-Signature-256",
+                "value": "sha256={{whatsappSignature}}",
+                "description": "Só é conferido quando whatsapp.app-secret está configurado. Calcule com: openssl dgst -sha256 -hmac <app-secret> -hex"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"object\": \"whatsapp_business_account\",\n  \"entry\": [\n    {\n      \"id\": \"0\",\n      \"changes\": [\n        {\n          \"field\": \"messages\",\n          \"value\": {\n            \"messaging_product\": \"whatsapp\",\n            \"messages\": [\n              {\n                \"from\": \"5511988887777\",\n                \"id\": \"wamid.EXEMPLO\",\n                \"timestamp\": \"1700000000\",\n                \"type\": \"text\",\n                \"text\": {\n                  \"body\": \"10 sacos de cimento\\n100 tijolos\"\n                }\n              }\n            ]\n          }\n        }\n      ]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/whatsapp/webhook",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "whatsapp",
+                "webhook"
               ]
             }
           }

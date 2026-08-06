@@ -26,4 +26,10 @@ public class BudgetRequestRepositoryImpl extends GenericRepositoryImpl<BudgetReq
     public List<BudgetRequest> listAllBudgetRequests() {
         return listAll();
     }
+
+    @Override
+    public Optional<BudgetRequest> findLastAwaitingSelectionByClientPhone(String phone) {
+        return find("client.phone = ?1 and quotesSentAt is not null and closedAt is null order by id desc", phone)
+                .firstResultOptional();
+    }
 }

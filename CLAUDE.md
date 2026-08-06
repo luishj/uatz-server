@@ -20,6 +20,7 @@ api/            → REST controller INTERFACES (@Path + JAX-RS annotations)
 api/impl/       → controller implementations (@Inject services, security annotations)
 service/        → business logic (interface + impl/)
 repository/     → data access (interface + impl/, extends GenericRepository)
+client/         → REST clients for external APIs (@RegisterRestClient)
 dto/            → request/response records, grouped by domain (auth/, budget/, vendor/, ...)
 mapping/        → entity <-> DTO conversion
 vo/             → value objects for queries (create when needed)
@@ -87,6 +88,14 @@ Note: bean-validation failures on endpoints are handled by Quarkus' own built-in
 
 `src/main/resources/application.properties`. Env vars: `BASE` (host:porta/base), `USUARIO`, `SENHA`
 — defaults point to the local `localhost:5432/uatz`.
+
+WhatsApp Cloud API: `WHATSAPP_ENABLED`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`,
+`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_API_URL` — all read through
+`Enviroment`. With `WHATSAPP_ENABLED=false` (default) outbound messages only go to the log.
+
+The webhook (`/api/whatsapp/webhook`, `@PermitAll`) takes the POST body as a raw `String`, not a
+DTO: the `X-Hub-Signature-256` HMAC is computed over the exact bytes, so the JSON is only parsed
+after the signature checks out.
 
 ## Internal Dependencies
 

@@ -11,4 +11,11 @@ public interface BudgetRequestRepository extends GenericRepository<BudgetRequest
     Optional<BudgetRequest> findOptionalById(Long id);
 
     List<BudgetRequest> listAllBudgetRequests();
+
+    /**
+     * Último pedido do cliente que já recebeu as opções e ainda não foi
+     * fechado. É contra ele que a resposta numérica vinda do WhatsApp é
+     * interpretada como escolha.
+     */
+    Optional<BudgetRequest> findLastAwaitingSelectionByClientPhone(String phone);
 }
