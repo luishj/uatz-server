@@ -89,6 +89,13 @@ Note: bean-validation failures on endpoints are handled by Quarkus' own built-in
 `src/main/resources/application.properties`. Env vars: `BASE` (host:porta/base), `USUARIO`, `SENHA`
 — defaults point to the local `localhost:5432/uatz`.
 
+JWT keys live in `.keys/` (gitignored, outside `src/main/resources` so they are not packaged into
+the jar), overridable with `JWT_PUBLIC_KEY_LOCATION` / `JWT_PRIVATE_KEY_LOCATION`. Never commit a
+`.pem`. `ValidacaoConfiguracaoImpl` (a `StartupEvent` observer) refuses to boot when the key pair is
+missing or mismatched, and when `WHATSAPP_ENABLED=true` without app-secret / verify-token /
+access-token / phone-number-id. Security config that is wrong must fail at boot, not at the first
+login or the first forged webhook.
+
 WhatsApp Cloud API: `WHATSAPP_ENABLED`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`,
 `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_API_URL` — all read through
 `Enviroment`. With `WHATSAPP_ENABLED=false` (default) outbound messages only go to the log.

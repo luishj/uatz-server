@@ -78,6 +78,19 @@ Publicar o model no repositório local (primeira vez e a cada alteração de ent
 cd ..\uatz-model; .\mvnw clean install
 ```
 
+Gerar o par de chaves do JWT (primeira vez, e sempre que precisar invalidar todos os tokens):
+
+```powershell
+mkdir .keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out .keys\privateKey.pem
+openssl rsa -pubout -in .keys\privateKey.pem -out .keys\publicKey.pem
+```
+
+A pasta `.keys/` está no `.gitignore` e fica **fora** de `src/main/resources`, para que a chave
+privada não entre no repositório nem seja empacotada dentro do jar. Sem o par a aplicação **não
+sobe**: `ValidacaoConfiguracaoImpl` assina e relê um token descartável no startup, o que também
+detecta par trocado (regerar só um dos dois lados).
+
 Subir a API (porta 8081):
 
 ```powershell
@@ -88,7 +101,9 @@ Subir a API (porta 8081):
 - Health: http://localhost:8081/q/health
 - Status: http://localhost:8081/api/status
 
-Variáveis de ambiente: `BASE` (host:porta/base), `USUARIO`, `SENHA`.
+Variáveis de ambiente: `BASE` (host:porta/base), `USUARIO`, `SENHA`,
+`JWT_PUBLIC_KEY_LOCATION` e `JWT_PRIVATE_KEY_LOCATION` (padrão `.keys/*.pem`; em produção aponte
+para o secret do provedor).
 
 ## Integração com o WhatsApp
 

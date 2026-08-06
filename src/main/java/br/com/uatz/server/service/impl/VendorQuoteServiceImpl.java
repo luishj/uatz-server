@@ -106,8 +106,28 @@ public class VendorQuoteServiceImpl implements VendorQuoteService {
     }
 
     @Override
+    @Transactional
+    public VendorQuote createForVendor(VendorQuoteRequest request, String vendorEmail) {
+        Vendor vendor = resolveVendorByEmail(vendorEmail);
+
+        if (!vendor.getId().equals(request.vendorId())) {
+            throw MessageBuilder.build(CloudMessage.COTACAO_DE_OUTRO_FORNECEDOR, Status.FORBIDDEN);
+        }
+
+        return create(request);
+    }
+
+    @Override
     public Optional<VendorQuote> findById(Long id) {
         return vendorQuoteRepository.findOptionalById(id);
+    }
+
+    @Override
+    public Optional<VendorQuote> findByIdForVendor(Long id, String vendorEmail) {
+        Vendor vendor = resolveVendorByEmail(vendorEmail);
+
+        return vendorQuoteRepository.findOptionalById(id)
+                .filter(quote -> quote.getVendor().getId().equals(vendor.getId()));
     }
 
     @Override
@@ -123,6 +143,17 @@ public class VendorQuoteServiceImpl implements VendorQuoteService {
     }
 
     @Override
+    public List<VendorQuote> findByVendorIdForVendor(Long vendorId, String vendorEmail) {
+        Vendor vendor = resolveVendorByEmail(vendorEmail);
+
+        if (!vendor.getId().equals(vendorId)) {
+            throw MessageBuilder.build(CloudMessage.COTACAO_DE_OUTRO_FORNECEDOR, Status.FORBIDDEN);
+        }
+
+        return vendorQuoteRepository.findByVendorId(vendorId);
+    }
+
+    @Override
     public VendorQuoteSummaryResponse summarizeByRequestId(Long requestId) {
         validateBudgetRequestExists(requestId);
         return VendorQuoteMapping.toSummary(requestId, vendorQuoteRepository.findByRequestId(requestId));
@@ -132,6 +163,11 @@ public class VendorQuoteServiceImpl implements VendorQuoteService {
     public Optional<VendorQuote> findByRequestIdAndVendorEmail(Long requestId, String email) {
         return vendorRepository.findByEmail(email)
                 .flatMap(vendor -> vendorQuoteRepository.findByRequestIdAndVendorId(requestId, vendor.getId()));
+    }
+
+    private Vendor resolveVendorByEmail(String vendorEmail) {
+        return vendorRepository.findByEmail(vendorEmail)
+                .orElseThrow(() -> MessageBuilder.build(CloudMessage.PERFIL_FORNECEDOR_NAO_ENCONTRADO, Status.NOT_FOUND));
     }
 
     private void validateBudgetRequestExists(Long requestId) {

@@ -1,0 +1,439 @@
+====================================================================================
+AVALIACAO TECNICA - UATZ SERVER
+Due diligence tecnica informal, perspectiva de Engenheiro de Software Senior
+
+Feita em 06/08/2026.
+Escopo lido: 5.758 linhas Java (uatz-server), 21 entidades (uatz-model),
+8 changelogs Liquibase (uatz-migration), pom.xml, application.properties,
+historico do Git.
+
+Companheiro deste documento: memorando-investimento.txt (visao de negocio).
+====================================================================================
+
+
+CORRECAO AO MEMORANDO DE INVESTIMENTO
+------------------------------------------------------------------------------------
+O context/itens-faltantes.txt esta DESATUALIZADO em relacao ao codigo.
+Ele diz que F3.3-F3.6 e F3.10 estao abertos, mas WhatsAppWebhookControllerImpl,
+WhatsAppCloudApiClient, WhatsAppSignatureUtil e a interpretacao da resposta numerica
+do cliente estao IMPLEMENTADOS E COMMITADOS.
+
+Logo, o deal-breaker n.1 do memorando ("o WhatsApp nao existe") esta parcialmente
+errado: falta a burocracia da Meta (F3.1/F3.2) e o tunel HTTPS (F3.9), nao o codigo.
+Isso sobe a nota de Produto de 6 para 7.
+
+Licao: documento desatualizado e barato de consertar e caro de manter errado.
+
+
+O QUE NAO FOI AVALIADO (falta informacao, nao houve chute)
+------------------------------------------------------------------------------------
+- uatz-web nao existe nesta maquina -> frontend, storage do token e XSS ficaram fora.
+- Nao ha Dockerfile, IaC nem CI no repositorio -> infra, backup e monitoramento foram
+  avaliados pela AUSENCIA DE EVIDENCIA, nao por evidencia de ausencia.
+
+
+====================================================================================
+NOTAS POR DIMENSAO
+====================================================================================
+
+1. ARQUITETURA E ESCOLHAS DE STACK ................................. 7/10
+2. ESCALABILIDADE .................................................. 4/10
+3. SEGURANCA E PRIVACIDADE ......................................... 3/10
+4. CONFIABILIDADE E OPERACAO ....................................... 2/10
+5. VELOCIDADE DE DESENVOLVIMENTO ................................... 4/10
+6. CUSTO ........................................................... 8/10
+7. RISCO DE DEPENDENCIAS ........................................... 5/10
+
+
+------------------------------------------------------------------------------------
+1. ARQUITETURA E ESCOLHAS DE STACK - 7/10
+------------------------------------------------------------------------------------
+Quarkus 3.15 + Panache + Postgres + Liquibase para um marketplace de orcamentos:
+escolha correta e chata, do jeito certo. Java 21, records nos DTOs, ErrorMapper
+global, CloudMessage centralizando mensagem de negocio. O split interface/impl nos
+controllers esta bem justificado no CLAUDE.md (interceptor de @RolesAllowed nao pega
+na interface; @Valid nao pode ser redeclarado no override - HV000151). Isso e
+conhecimento que se paga em producao.
+
+WhatsAppGateway abstraido do transporte e a melhor decisao do repositorio: ligar a
+Cloud API e trocar o bean.
+
+O QUE DESCONTA
+  - Duas ferramentas de migracao no mesmo repo: uatz-migration/db-flyway-legado/
+    V1..V7 convivendo com os changelogs Liquibase. Se algum ambiente ja rodou o
+    Flyway, ha duas fontes de verdade do schema.
+    SOLUCAO: deletar a pasta legada e registrar no README qual e a autoridade.
+    ESFORCO: baixo.
+
+  - Over-engineering pontual: StatusEntity em tabela + StatusType/BudgetRequestStatus
+    em enum e o mesmo estado modelado duas vezes, e cada transicao paga um
+    findByTypeAndCode (BudgetRequestDistributionServiceImpl:182-190). Para 13 tabelas
+    e 0 usuarios, e cerimonia. Nao mexer agora - e divida deliberada.
+
+  - Inconsistencia de injecao: services por construtor, controllers por campo @Inject.
+    Esta documentado como padrao, mas campo @Inject e o que impede teste unitario sem
+    CDI - e nao ha testes.
+
+
+------------------------------------------------------------------------------------
+2. ESCALABILIDADE - 4/10
+------------------------------------------------------------------------------------
+QUEBRA NO 10x (aprox. 1.000 pedidos)
+
+  a) ZERO INDICES NO BANCO
+     Verificado changelog por changelog: 13 tabelas, NENHUM createIndex. Existem PKs,
+     uniques e FKs inline - mas Postgres NAO indexa coluna de FK automaticamente.
+     budget_items.request_id, vendor_quotes.request_id, vendor_quote_items.quote_id,
+     messages.conversation_id e budget_request_vendors.vendor_id sao todos seq scan.
+     findByRequestId e chamado em praticamente todo fluxo.
+     SOLUCAO: um changelog com ~8 indices nas FKs mais quentes.
+     ESFORCO: baixo (uma tarde). Melhor retorno por hora de todo este documento.
+
+  b) N+1 NA TELA PRINCIPAL DO PAINEL
+     BudgetRequestServiceImpl:165-173 - listAllBudgetRequests() traz TODOS os pedidos
+     que ja existiram, sem paginacao nem filtro, e dispara um findByRequestId por
+     pedido. Com 1.000 pedidos: 1.001 queries e a tabela inteira em memoria, a cada
+     carregamento de tela.
+     SOLUCAO: paginacao (Panache.find(...).page()) + join fetch nos itens.
+     ESFORCO: medio.
+
+  c) A VERSAO DO FORNECEDOR E PIOR
+     findAllWithItemsForVendor:176-190 carrega TODOS os pedidos e filtra em Java com
+     allowedRequestIds.contains(...) - O(n*m) com uma List. O fornecedor paga o custo
+     de ler pedidos que nem pode ver.
+     SOLUCAO: filtrar no SQL (WHERE id IN :ids) ou no minimo trocar List por Set.
+     ESFORCO: baixo.
+
+  d) N+1 NO DISPATCH
+     BudgetRequestDistributionServiceImpl:65-72 - findAllActive() traz todo fornecedor
+     ativo e roda findProductIdsByVendorId DENTRO do stream: uma query por fornecedor.
+     Com 500 lojas, 500 queries para distribuir um pedido.
+     SOLUCAO: uma query so -
+       SELECT DISTINCT vendor_id FROM vendor_products WHERE product_id IN :ids
+     ESFORCO: baixo. Fazer junto com o filtro de cidade (F1.3) - e o mesmo WHERE.
+
+QUEBRA NO 100x (aprox. 10.000 pedidos)
+  Processamento sincrono no webhook. process() faz parse, cria cliente, conversa,
+  pedido e itens DENTRO do request HTTP da Meta. A Meta tem timeout e reenvia o que
+  nao recebe 200 rapido. Somado a falta de idempotencia, vira loop de duplicacao.
+  SOLUCAO: responder 200 imediatamente e processar em fila (F5.7).
+  ESFORCO: medio. Ignorar ate ter 100 pedidos/dia reais.
+
+
+------------------------------------------------------------------------------------
+3. SEGURANCA E PRIVACIDADE - 3/10
+------------------------------------------------------------------------------------
+Nota baixa por causa de tres achados concretos, dois deles graves. O restante da
+postura de seguranca e acima da media - o que torna esses tres ainda mais visiveis.
+
+*** CRITICO 1 - FORNECEDOR LE COTACAO DOS CONCORRENTES E COTA NO NOME DELES ***
+
+  VendorQuoteControllerImpl.java:20 libera a classe inteira para Perfil.VENDOR.
+  Nenhum dos metodos abaixo checa se a cotacao pertence a quem esta pedindo:
+
+    GET /api/vendor-quotes/request/{id}          -> todas as cotacoes concorrentes
+                                                    do pedido, com preco
+    GET /api/vendor-quotes/request/{id}/summary  -> o resumo comparativo do pedido
+    GET /api/vendor-quotes/vendor/{vendorId}     -> historico inteiro de precos de
+                                                    QUALQUER concorrente
+    GET /api/vendor-quotes/{id}                  -> qualquer cotacao, por id
+
+  O problema foi percebido: findCurrentVendorQuoteByRequestId (:56-61) existe
+  justamente para escopar pelo JWT, e BudgetRequestControllerImpl faz isso certo em
+  TODOS os metodos (findAllWithItemsForVendor, findResponseByIdForVendor,
+  findSelectionForVendor). O padrao esta no repositorio. Foi esquecido em exatamente
+  um controller.
+
+  E TEM A METADE PIOR:
+  VendorQuoteServiceImpl.create():68 confia no request.vendorId() VINDO DO CORPO DA
+  REQUISICAO e nunca compara com o sub do JWT. Um fornecedor logado pode enviar
+  cotacao EM NOME DE OUTRO FORNECEDOR.
+
+  Ataque completo: leio o preco do concorrente -> registro uma cotacao absurda no
+  nome dele -> a trava FORNECEDOR_JA_COTOU_PEDIDO (:75) o impede de corrigir -> ele
+  perde o pedido e nunca sabe por que.
+
+  Num marketplace cujo produto E a cotacao competitiva, isso nao e um bug de
+  seguranca: e o produto deixando de existir.
+
+  SOLUCAO: derivar o vendorId do JWT em create() e ignorar o campo do body (ou
+  rejeitar se divergir); nos 4 GETs, restringir a {ADMIN, OPERATOR} no metodo ou
+  filtrar por vendor do token quando isVendor().
+  ESFORCO: baixo - meio dia.
+
+
+*** CRITICO 2 - CHAVE PRIVADA DO JWT COMMITADA NO GIT ***
+
+    src/main/resources/privateKey.pem   <- rastreado pelo git
+    src/main/resources/publicKey.pem
+
+  Quem tiver acesso ao repositorio assina token para qualquer e-mail com
+  groups: ["ADMIN"]. Nao existe autenticacao depois disso. O .gitignore cobre .env
+  mas nao cobre *.pem.
+
+  SOLUCAO: gerar novo par, injetar por env var / secret do provedor,
+  git rm --cached nos dois, adicionar *.pem ao .gitignore, e PURGAR O HISTORICO
+  (git filter-repo) - remover no HEAD nao adianta, a chave continua em todo commit
+  anterior.
+  ESFORCO: baixo hoje, alto daqui a um ano.
+
+
+*** CRITICO 3 - ASSINATURA DO WEBHOOK E OPCIONAL ***
+
+  WhatsAppWebhookServiceImpl:103-114 - se whatsapp.app-secret estiver vazio, a
+  validacao HMAC e PULADA com um logger.warn e o payload e processado. O default em
+  application.properties:35 e string vazia. Um deploy que esqueca uma env var abre um
+  endpoint @PermitAll onde qualquer um na internet injeta pedidos de orcamento em
+  nome de qualquer telefone.
+
+  O codigo esta honesto - o Javadoc diz exatamente isso. Mas comentario nao impede
+  deploy.
+
+  SOLUCAO: falhar no startup quando whatsapp.enabled=true e o app-secret estiver
+  vazio (@Startup validando Enviroment). Dev continua com enabled=false.
+  ESFORCO: baixo - 20 linhas.
+
+  NOTA POSITIVA: a implementacao do HMAC em si (WhatsAppSignatureUtil) esta CORRETA -
+  corpo bruto, MessageDigest.isEqual em tempo constante, hex invalido virando array
+  vazio. Bem feito.
+
+
+DEMAIS ACHADOS DE SEGURANCA
+  - Sem rate limiting no login. POST /api/auth/login e @PermitAll sem throttling.
+    Bcrypt segura brute force offline, nao online nem enumeracao de usuario.
+    SOLUCAO: quarkus-smallrye-fault-tolerance com bulkhead, ou rate limit no Nginx.
+    ESFORCO: baixo.
+
+  - Token de 1h, sem refresh e sem revogacao (TokenServiceImpl:14). Trocar a role de
+    um usuario ou desativar um fornecedor nao invalida o token ja emitido - ele
+    continua ADMIN por ate 60 minutos.
+    ESFORCO: medio.
+
+  - CORS so aceita localhost:4200 (application.properties:27). Nao e falha, e sinal:
+    nunca houve deploy.
+
+  - quarkus.swagger-ui.always-include=true publica o Swagger em producao. Baixo
+    risco, mas e mapa gratis para atacante. ESFORCO: trivial.
+
+  - LGPD: sao armazenados telefone, cidade e o CONTEUDO INTEGRAL das conversas
+    (tabela messages). Isso e dado pessoal. Nao ha base legal registrada, politica de
+    retencao nem caminho de exclusao. Com 0 usuarios nao e urgente; com a primeira
+    loja pagante, e.
+    SOLUCAO MINIMA: politica de privacidade, aviso na primeira mensagem do bot, e
+    DELETE /clients/{id} com anonimizacao. ESFORCO: medio.
+
+
+------------------------------------------------------------------------------------
+4. CONFIABILIDADE E OPERACAO - 2/10
+------------------------------------------------------------------------------------
+Nao e critica ao codigo, e a constatacao de que esta camada NAO EXISTE.
+
+  Dockerfile / imagem ....... NAO EXISTE (so um docker-compose.yml de 311 bytes para
+                              o Postgres local)
+  CI/CD ..................... NENHUM workflow, Jenkinsfile ou pipeline
+  Ambiente de producao ...... ? nenhum artefato no repo indica que exista
+  Health check .............. OK - quarkus-smallrye-health no pom -> /q/health
+  Metricas / tracing ........ NAO - sem Micrometer, sem OpenTelemetry
+  Log estruturado ........... NAO - JBoss Logger em texto puro, sem correlation id
+  Backup do Postgres ........ ? nao avaliavel
+  Alerta .................... INEXISTENTE
+
+O QUE ACONTECE AS 3H DA MANHA HOJE: nada, porque ninguem e avisado. Descobre-se pelo
+WhatsApp de um lojista irritado, na manha seguinte. Com 10 lojas e toleravel. Com 3
+lojas PAGANDO, e churn.
+
+PLANO PROPORCIONAL AO ESTAGIO (nao pedir Kubernetes a quem tem 0 usuarios):
+  - Dockerfile (Quarkus gera src/main/docker/* com -Dquarkus.container-image) +
+    deploy numa VPS de R$ 30/mes ou Fly.io/Railway. ESFORCO: baixo.
+  - pg_dump diario para um bucket, com restore TESTADO uma vez. Backup nao testado
+    nao e backup. ESFORCO: baixo.
+  - UptimeRobot batendo em /q/health a cada 5 min, alerta no WhatsApp. Gratuito.
+    ESFORCO: trivial.
+  - Um GitHub Actions com mvnw verify. ESFORCO: baixo.
+
+  Tudo isso cabe em dois dias e cobre 90% do risco operacional dessa fase.
+
+
+------------------------------------------------------------------------------------
+5. VELOCIDADE DE DESENVOLVIMENTO - 4/10
+------------------------------------------------------------------------------------
+ZERO TESTES. quarkus-junit5, rest-assured, surefire e failsafe estao TODOS no pom - a
+infraestrutura de teste foi configurada e NENHUM teste foi escrito. Nao ha um unico
+arquivo em src/test.
+
+Isso ja esta custando dinheiro: os dois furos de seguranca do item 3 sao exatamente o
+que um teste de integracao de autorizacao pegaria em 5 minutos - "fornecedor A pede a
+cotacao do fornecedor B -> espero 403".
+
+NAO PEDIR 80% DE COBERTURA A UM MVP. Pedir 3 testes:
+  1. VendorQuoteResourceTest - fornecedor A nao enxerga cotacao de B, e nao cota no
+     nome de B.
+  2. BudgetRequestParserTest - "10 sacos de cimento\n100 tijolos" vira 2 itens com
+     quantidade e unidade certas.
+  3. WhatsAppWebhookTest - assinatura invalida -> 403; payload duplicado -> 1 pedido.
+  ESFORCO: medio (2 dias). Cobrem os 3 lugares onde o dinheiro passa.
+
+CADENCIA: 8 commits entre marco e agosto, com 4 meses parados. Nao e preguica, e
+falta de ciclo. Sem CI e sem testes, cada retomada depois de um mes parado custa meio
+dia so para reconstruir confianca no que esta funcionando. Testes sao, antes de tudo,
+investimento contra a propria descontinuidade.
+
+A FAVOR: o codigo e LEGIVEL. Nomes em portugues consistentes, javadoc onde a decisao
+nao e obvia (o comentario do WhatsAppSignatureUtil explicando por que o payload e
+String e nao DTO e exemplar), erros centralizados. Um segundo dev entra nesse
+repositorio em dois dias. Isso e raro e vale muito.
+
+
+------------------------------------------------------------------------------------
+6. CUSTO - 8/10
+------------------------------------------------------------------------------------
+Praticamente nada rodando, praticamente nada gasto. Nao ha desperdicio porque nao ha
+infra - e para 0 usuarios essa e a resposta certa.
+
+Projecao realista quando ligar: VPS 2 vCPU/4GB (R$ 40-80/mes) + Postgres gerenciado
+ou no mesmo host (R$ 0-100) + dominio + tunel HTTPS. MENOS DE R$ 200/MES sustenta as
+primeiras 50 lojas com folga. Quarkus em JVM cabe em 512MB; nativo cabe em 128MB, mas
+NAO COMPILAR NATIVO AGORA - o ganho e irrelevante nessa escala e o custo de build e
+de debug nao e.
+
+O unico custo variavel que merece atencao e a CONVERSA DO WHATSAPP: a Cloud API cobra
+por conversa iniciada pelo negocio. Todo sendQuoteOptions e uma dessas. Nas contas de
+unit economics isso e COGS por pedido, nao custo fixo. Com R$ 500/mes de ticket sobra
+muito - mas modele antes de prometer volume ilimitado a um lojista.
+
+
+------------------------------------------------------------------------------------
+7. RISCO DE DEPENDENCIAS - 5/10
+------------------------------------------------------------------------------------
+  - BUS FACTOR = 1. Um autor, um e-mail, todo o conhecimento. Maior risco tecnico da
+    empresa e nao se resolve com codigo. Mitigacao barata: os CLAUDE.md e o context/
+    ja sao um bom comeco - mantenha-os ATUALIZADOS (ver correcao no topo).
+
+  - META/WHATSAPP e dependencia critica e caprichosa. Bloqueio de numero, mudanca de
+    politica ou de precificacao derruba o produto inteiro. Nao da para eliminar - e a
+    tese. Mas o WhatsAppGateway abstraido ja da a saida de emergencia (SMS, Telegram,
+    web) sem reescrever o dominio. Boa arquitetura.
+
+  - VENDOR LOCK-IN DE INFRA: baixo. Quarkus + Postgres roda em qualquer lugar.
+
+  - uatz-model / uatz-migration acoplados por mvn install local. Nao ha repositorio
+    de artefatos: a build depende do .m2 da maquina. Um CI limpo nao compila hoje sem
+    buildar os tres na ordem certa.
+    SOLUCAO: POM pai multi-modulo ou GitHub Packages. ESFORCO: baixo.
+
+  - Lombok + MapStruct no pom com uso minimo - dois processadores de anotacao que
+    brigam por ordem de execucao, ganhando pouco. Se nao estiver usando, remova.
+    ESFORCO: trivial.
+
+
+====================================================================================
+PARECER EXECUTIVO
+====================================================================================
+
+3 PONTOS FORTES REAIS
+------------------------------------------------------------------------------------
+1. O DOMINIO ESTA MODELADO CORRETAMENTE. Maquina de estados de pedido e de
+   atribuicao, unique (request_id, vendor_id) impedindo cotacao dupla no banco,
+   viewedAt/respondedAt/declinedAt capturados desde o inicio, validacao de que todos
+   os itens foram cotados. Alguem pensou no negocio antes de digitar. E o que mais
+   custa a consertar depois e e justamente o que esta bem.
+
+2. FRONTEIRAS BEM ESCOLHIDAS. WhatsAppGateway isolando o transporte e o webhook
+   recebendo String bruta pelo motivo certo (HMAC sobre os bytes exatos) sao decisoes
+   de quem ja se queimou. A troca de log por Cloud API e literalmente trocar um bean.
+
+3. LEGIBILIDADE E CONSISTENCIA ACIMA DA MEDIA PARA MVP. Padrao de erro unico,
+   mensagens externalizadas, camadas coerentes, comentarios que explicam o PORQUE e
+   nao o O QUE. Onboarding de um segundo dev e questao de dias - o que importa muito,
+   dado o bus factor 1.
+
+
+3 RISCOS MAIS CRITICOS, EM ORDEM DE URGENCIA
+------------------------------------------------------------------------------------
+1. VendorQuoteControllerImpl - leitura de cotacao alheia + criacao de cotacao em nome
+   de terceiro. Quebra a premissa competitiva do marketplace e e exploravel por
+   qualquer fornecedor cadastrado, sem ferramenta nenhuma.
+   CORRIGIR HOJE.
+
+2. Chave privada do JWT no historico do Git. Comprometimento total de autenticacao.
+   O custo de purgar cresce com cada dia e cada colaborador novo.
+   CORRIGIR NESTA SEMANA.
+
+3. Operacao inexistente + assinatura de webhook opcional. Nao se vai a producao com
+   um endpoint publico que aceita payload nao assinado, sem backup testado e sem
+   ninguem sendo avisado quando cai. Os tres juntos transformam o primeiro incidente
+   em perda de dados.
+   CORRIGIR ANTES DO PRIMEIRO CLIENTE REAL.
+
+
+PLANO DE ACAO PRIORIZADO
+------------------------------------------------------------------------------------
+PROXIMOS 30 DIAS - NAO QUEBRAR E NAO VAZAR (aprox. 5 dias de trabalho)
+  [ ] Escopar VendorQuoteController por JWT (4 GETs + vendorId do token no create)
+      - 1/2 dia
+  [ ] Rotacionar as chaves .pem, mover para env var, *.pem no .gitignore, purgar
+      historico - 1/2 dia
+  [ ] Falhar no startup se whatsapp.enabled=true sem app-secret - 2h
+  [ ] Idempotencia do webhook por message.id (tabela + unique) - 1/2 dia
+  [ ] Changelog de indices nas FKs quentes - 1/2 dia
+  [ ] Os 3 testes do item 5 - 2 dias
+  [ ] Dockerfile + deploy em VPS + pg_dump diario + UptimeRobot no /q/health - 1 dia
+  [ ] Atualizar o itens-faltantes.txt (F3.3-F3.6 e F3.10 estao feitos) - 30 min
+
+PROXIMOS 90 DIAS - AGUENTAR OS PRIMEIROS CLIENTES (aprox. 8 dias)
+  [ ] F1.3 filtro cidade/estado JUNTO com a correcao do N+1 do dispatch (mesmo WHERE)
+      - 1 dia
+  [ ] Paginacao + join fetch nas listagens de pedido - 2 dias
+  [ ] F2.4/F2.7 tela de fechamento no painel - 2 dias
+  [ ] GitHub Actions rodando mvnw verify no push - 1/2 dia
+  [ ] Refresh token + revogacao - 1 dia
+  [ ] F2.8 versionar a lista de opcoes. Hoje sendQuoteOptions renumera a cada
+      chamada - o cliente responde "2" sobre a lista antiga e fecha com o fornecedor
+      errado. ISSO E UM BUG DE DINHEIRO, NAO DE UX - 1 dia
+  [ ] LGPD minimo: politica, aviso no bot, exclusao/anonimizacao - 1 dia
+
+PROXIMOS 180 DIAS - SO SE A TRACAO VIER
+  [ ] Fila para o processamento do webhook (F5.7)
+      GATILHO: 100 pedidos/dia
+  [ ] Log estruturado + Micrometer + um dashboard
+      GATILHO: primeiro incidente que nao se conseguiu explicar
+  [ ] Monorepo/artefatos para uatz-model e uatz-migration
+      GATILHO: segundo desenvolvedor
+  [ ] Historico de precos (F5.1) - nao e feature, e o ativo de dados da empresa;
+      comecar a acumular cedo mesmo sem tela
+  [ ] NAO FAZER: Redis, microservicos, WebSocket, compilacao nativa. Nenhum desses
+      resolve um problema que existe hoje.
+
+
+SE ESTE PRODUTO FOSSE MEU, A PRIMEIRA COISA QUE EU MUDARIA SERIA...
+------------------------------------------------------------------------------------
+...o VendorQuoteController, hoje, antes de qualquer outra linha - porque e meia hora
+de trabalho separando um marketplace funcional de um sistema onde o fornecedor le o
+preco do concorrente e cota no nome dele. O padrao certo ja esta escrito em
+BudgetRequestControllerImpl e foi esquecido num arquivo so. Nao e falta de
+competencia; e falta de um teste que grite. Escreva a correcao e o teste na mesma
+tarde e voce elimina simultaneamente o pior risco de seguranca e a pior lacuna de
+processo do projeto.
+
+
+PERGUNTAS EM ABERTO (nao avaliaveis pelo codigo)
+------------------------------------------------------------------------------------
+1. Existe algum ambiente rodando hoje (VPS, Fly, Railway, Render) ou esta tudo so na
+   maquina do desenvolvedor?
+2. Existe backup do Postgres - e o restore ja foi testado alguma vez?
+3. Qual o estado do uatz-web? Onde ele mora, e onde o token JWT e guardado
+   (localStorage, sessionStorage, cookie)?
+4. O app ja foi enviado para revisao da Meta? E o unico item do caminho critico com
+   prazo que nao depende do time.
+5. O que mais tira o sono hoje - seguranca, performance, "nao sei se consigo manter
+   isso sozinho", ou outra coisa?
+
+
+====================================================================================
+REFERENCIAS
+------------------------------------------------------------------------------------
+memorando-investimento.txt ................. avaliacao de negocio (mesma data)
+context/PROJECT_CONTEXT.md ................. visao de produto, modelo de dados
+context/itens-faltantes.txt ................ backlog (DESATUALIZADO - ver topo)
+CLAUDE.md .................................. padroes do backend
+====================================================================================

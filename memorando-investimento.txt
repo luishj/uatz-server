@@ -1,0 +1,228 @@
+====================================================================================
+MEMORANDO DE INVESTIMENTO - UATZ
+Plataforma de Orcamentos via WhatsApp
+
+Avaliacao feita em 06/08/2026, na perspectiva de um fundo de Venture Capital
+early-stage (pre-seed a Serie A), cruzando as respostas do fundador com
+context/PROJECT_CONTEXT.md, context/roadmap_desenvolvimento_orcamentos_whatsapp.pdf,
+context/itens-faltantes.txt e o historico do Git.
+
+Estagio declarado: MVP
+Estagio real:      pre-produto / pre-tracao
+Regua aplicada:    pre-seed (time + mercado + velocidade)
+====================================================================================
+
+
+PITCH EM UMA FRASE
+------------------------------------------------------------------------------------
+"Ajudamos consumidores a cotar materiais (hoje, construcao) mandando uma lista no
+WhatsApp, distribuindo o pedido para lojas da regiao e devolvendo os melhores precos."
+
+
+RESPOSTAS DO LEVANTAMENTO
+------------------------------------------------------------------------------------
+1.  Quem sofre a dor .............. Consumidor final (B2C)
+2.  Como resolve hoje ............. Planilha / WhatsApp / papel (manual)
+3.  Intensidade da dor ............ Critica ("perco dinheiro/clientes toda semana")
+4.  SOM ........................... Nunca calculado ("acho que mais de R$ 500 mi")
+5.  Quem paga ..................... Um lado paga, o outro usa de graca (two-sided)
+6.  Tamanho do lado pagante ....... 50 mil a 500 mil no Brasil
+7.  Ticket ........................ R$ 500+/mes
+8.  Estagio do produto ............ MVP no ar, poucos usuarios
+9.  Usuarios ativos (lado pagante). 0
+10. Usuarios ativos (lado gratis) . 0
+11. MRR ........................... R$ 0
+12. Transacao ..................... Comeca na plataforma e termina fora
+
+
+A CONTA DE MERCADO QUE FALTAVA
+------------------------------------------------------------------------------------
+SAM = 50k a 500k pagantes x R$ 500+/mes = R$ 300 mi a R$ 3 bi de receita anual.
+SOM em 3 anos = capturar 1% a 5% disso  = R$ 3 mi a R$ 150 mi de ARR.
+
+O "mais de R$ 500 mi" era SAM, nao SOM. Use essa conta no deck: investidor confia
+mais em quem apresenta um SOM pequeno e defensavel do que num bilhao de fantasia.
+
+
+RESUMO DA TESE (3 LINHAS)
+------------------------------------------------------------------------------------
+Marketplace regional de orcamentos que troca o "sair ligando pra 5 lojas" por uma
+lista mandada no WhatsApp, comecando por material de construcao. O insight de canal
+e bom - WhatsApp e onde o brasileiro ja cota - e existe codigo real e bem arquitetado
+no chao. Mas e um marketplace two-sided com zero liquidez nos dois lados, tocado por
+um fundador solo em ritmo de projeto paralelo, e a peca que da nome ao produto (o
+WhatsApp) ainda nao foi construida.
+
+
+SCORECARD
+------------------------------------------------------------------------------------
+MERCADO ................ 7/10
+  Dor real e frequente; material de construcao tem ticket alto, recompra e lojista
+  faminto por lead. Perde ponto porque o SOM nunca foi calculado - a conta acima
+  saiu do investidor, nao do fundador.
+
+PRODUTO ................ 6/10
+  O backend e serio: camadas interface/impl, JWT, parser, dispatch, fluxo de
+  fechamento com lista numerada. Melhor engenharia do que 90% dos MVPs nesse
+  estagio. Mas o ciclo nao fecha ponta a ponta para nenhum usuario real.
+
+TRACAO ................. 1/10
+  0 clientes, 0 lojas, 0 transacoes, R$ 0 de MRR. So nao e zero porque existe
+  software rodando.
+
+TIME ................... 3/10
+  Fundador solo, tecnico, sem socio comercial - num negocio cujo gargalo e vendas
+  porta a porta pra lojista, nao codigo. O Git conta a historia: 8 commits entre
+  marco e agosto de 2026, com um vao de 4 meses parado.
+
+MODELO DE NEGOCIO ...... 4/10
+  R$ 500+/mes do lojista e defensavel SE houver prova de ROI em vendas. Hoje o valor
+  vaza: o contato e liberado e o negocio fecha fora da plataforma - sem GMV medido,
+  sem take rate.
+
+MOMENTO (TIMING) ....... 5/10
+  WhatsApp Cloud API + LLM para interpretar lista de compras e uma janela boa e
+  aberta agora. Mas e uma janela que qualquer um enxerga, e a empresa esta andando
+  devagar dentro dela.
+
+
+O QUE ME EMPOLGA
+------------------------------------------------------------------------------------
+1. O CANAL ESTA CERTO.
+   Ninguem vai baixar app pra cotar cimento. Mandar a lista no WhatsApp tem friccao
+   quase zero para o lado que hoje e o mais dificil de adquirir. E uma escolha de
+   fundador que entende o cliente.
+
+2. A ENGENHARIA E ACIMA DA MEDIA DO ESTAGIO.
+   Modelo de dados coerente, WhatsAppGateway ja abstraido do transporte (trocar log
+   por Cloud API e trocar o bean), fluxo de fechamento com numeracao e
+   selected_quote_id persistido. Isso nao e slide, e software. Reduz muito o risco
+   de execucao tecnica.
+
+3. A CAMADA DE DADOS E O ATIVO DE LONGO PRAZO.
+   vendor_quotes acumulando preco por produto, por loja, por regiao, ao longo do
+   tempo, e uma base que ninguem copia em 3 meses - vira comparador de precos e
+   credito. Esta listado como "Etapa 7"; na verdade e a razao de existir da empresa.
+
+
+O QUE ME PREOCUPA
+------------------------------------------------------------------------------------
+1. DEAL-BREAKER - O PRODUTO QUE ESTA SENDO PITCHADO AINDA NAO EXISTE.
+   Chama-se "Plataforma de Orcamentos VIA WHATSAPP" e os itens F3.1 a F3.9 estao
+   todos abertos: sem conta Meta business, sem numero verificado, sem webhook, sem
+   REST client da Graph API. A unica porta de entrada e POST /whatsapp/simulations,
+   um endpoint de simulacao. O painel do fornecedor (Etapa 4) foi construido antes
+   da entrada do cliente (Etapa 3, nao iniciada) - ou seja, terminou-se o lado sem
+   gargalo de aquisicao e deixou-se pra depois o lado que e a tese inteira. E a
+   aprovacao da Meta leva semanas: e o item de maior lead time e o unico que nao
+   depende do fundador.
+
+2. DEAL-BREAKER - VELOCIDADE INCOMPATIVEL COM CAPITAL DE RISCO.
+   8 commits, um autor, marco -> agosto. Quatro meses de silencio no meio. Um fundo
+   pre-seed nao compra o produto, compra a taxa de aprendizado por mes. Nessa
+   cadencia, os R$ 3-150 mi de SOM levam uma decada, e nesse tempo alguem com um
+   time de 4 pessoas chega antes. Se e trabalho noturno paralelo a um emprego
+   integral, tudo bem - mas entao isso e um projeto, e projeto nao capta.
+
+3. MARKETPLACE TWO-SIDED COM VAZAMENTO ESTRUTURAL DE VALOR.
+   Ovo e galinha nos dois lados ao mesmo tempo e o modo dificil. Pior: o desenho
+   atual libera o contato e a transacao termina no WhatsApp direto entre cliente e
+   loja. Fica-se sem GMV, sem take rate e sem retencao - o lojista paga R$ 500/mes
+   por 2 meses, percebe que ja tem o telefone dos clientes, e cancela.
+   Alem disso, BudgetRequestDistributionServiceImpl:65-72 IGNORA cidade e estado ao
+   escolher fornecedores: a palavra "regional" esta na tese, no PDF e no
+   PROJECT_CONTEXT, mas nao esta no codigo.
+
+
+PERGUNTAS QUE EU FARIA NA REUNIAO DE PARTNERS
+------------------------------------------------------------------------------------
+1. Ja vendeu isso para alguma loja de material de construcao? Nao "mostrou" - pediu
+   R$ 500/mes e ouviu sim ou nao. Se nunca pediu dinheiro, nao sabemos se o modelo
+   existe.
+
+2. Isso e integral ou paralelo? Se e paralelo: qual o gatilho concreto (valor
+   captado, numero de clientes, data) que faz o fundador largar o resto? Sem
+   resposta objetiva aqui, nao ha investimento.
+
+3. Quem vende? O gargalo desse negocio e convencer 30 lojistas de bairro,
+   presencialmente, um a um. Quem no time faz isso - e se nao ha ninguem, por que o
+   socio comercial ainda nao existe?
+
+
+VEREDITO: PASSARIA - COM PORTA ABERTA
+------------------------------------------------------------------------------------
+Passo hoje, e o motivo nao e o mercado nem o codigo: e TIME E VELOCIDADE. Fundador
+solo tecnico, part-time, num negocio cujo desafio central e comercial, com zero
+validacao de disposicao a pagar. Nao ha como um comite aprovar isso.
+
+O que mantem a porta aberta e que a fraqueza aqui e rara e cara de resolver (vendas),
+enquanto a forca e justamente o que quebra a maioria: este fundador CONSTROI.
+Cinco lojas pagando e um socio comercial, e a proxima reuniao e marcada no mesmo dia.
+
+
+CONSELHO DE AMIGO - OS PROXIMOS 90 DIAS
+------------------------------------------------------------------------------------
+REGRA NUMERO UM: pare de construir o roadmap e passe a construir a evidencia.
+Ha 4 meses de codigo acumulado e zero clientes. O que esta faltando na empresa nao
+esta no itens-faltantes.txt.
+
+DIAS 1-7 - DESBLOQUEIE O QUE NAO DEPENDE DE VOCE
+  Abrir a conta Meta business e iniciar a verificacao do numero (F3.1) HOJE. E o
+  item de maior lead time do projeto e e burocracia pura. Enquanto a Meta processa,
+  o trabalho continua.
+
+DIAS 1-30 - VENDA ANTES DE TERMINAR
+  Escolher UM bairro. Bater na porta de 30 lojas de material com o painel que JA
+  ESTA PRONTO e um roteiro de uma frase: "eu te mando pedidos de gente do bairro que
+  quer cotar; voce responde o preco na tela; se fechar, e seu."
+  Meta: 10 lojas cadastradas e ativas no painel. Gratis nos primeiros 90 dias, sem
+  culpa - em marketplace, o lado da oferta se subsidia. Depois disso, cobrar R$ 500
+  de 3 delas e ver quem paga. Esse numero - quantas pagam - vale mais que todo o
+  backlog.
+
+DIAS 15-45 - FECHE O CICLO, MESMO QUE FEIO (nessa ordem, e so isso)
+  F1.3        Filtrar fornecedor por cidade/estado. Sem isso nao existe "regional",
+              e um pedido de Jundiai indo pra loja de Recife mata a confianca das
+              duas pontas na primeira semana.
+  F2.4 + F2.7 Tela de fechamento no painel. O backend esta pronto (/quote-options,
+              /selection); falta o botao. E o que transforma o que ja existe em demo
+              que fecha ponta a ponta.
+  F3.4 - F3.7 Webhook real com verificacao de assinatura e idempotencia por id de
+              mensagem. A Meta reenvia webhook; sem F3.7 cada reenvio abre um pedido
+              duplicado na frente do lojista, e queima a loja que levou uma semana
+              pra conquistar.
+
+  Enquanto o numero nao sai da Meta, o fundador e o robo: recebe as listas no
+  WhatsApp pessoal e digita no POST /whatsapp/simulations. Serve para 50 pedidos e
+  ensina mais sobre o parser do que qualquer refactor.
+
+IGNORE POR ENQUANTO
+  Redis, filas, microservicos, WebSocket, IA (F5.6 a F5.13). Sao problemas de uma
+  empresa com 10 mil pedidos/mes. Hoje sao zero. Cada hora ali e uma hora nao gasta
+  no unico problema que importa.
+
+DIAS 30-90 - RESOLVA O BURACO DO TIME
+  Procurar um socio comercial que conheca varejo de construcao - alguem que ja
+  vendeu pra lojista. Oferecer equity de verdade (20-30%, vesting de 4 anos, cliff
+  de 1). Fundador solo e o fator isolado que mais faz um fundo passar, e e o unico
+  item desta lista que nao se resolve programando.
+
+FECHE O VAZAMENTO ANTES DE PRECIFICAR
+  Enquanto o negocio terminar fora da plataforma, nao ha marketplace - ha gerador de
+  leads, que e um negocio pior e mais barato. Comece medindo: perguntar ao cliente,
+  3 dias depois, se fechou e por quanto. E uma mensagem no WhatsApp e vira o
+  primeiro dado de GMV.
+
+O NUMERO QUE EU QUERO VER EM 90 DIAS
+  "10 lojas ativas, 40 pedidos reais processados, 3 lojas pagando R$ 500/mes."
+  Com isso na mao, a conversa recomeca de um lugar completamente diferente - e a
+  nota de Tracao sai de 1 para 6.
+
+
+====================================================================================
+REFERENCIAS
+------------------------------------------------------------------------------------
+context/PROJECT_CONTEXT.md ................. visao de produto, modelo de dados
+context/roadmap_desenvolvimento_orcamentos_whatsapp.pdf .... 10 etapas
+context/itens-faltantes.txt ................ backlog com evidencia (arquivo:linha)
+====================================================================================

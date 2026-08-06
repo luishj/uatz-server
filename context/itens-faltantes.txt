@@ -1,17 +1,29 @@
 ====================================================================================
 ITENS FALTANTES - Plataforma de Orcamentos via WhatsApp
+
 Levantado em 05/08/2026, cruzando context/PROJECT_CONTEXT.md +
 context/roadmap_desenvolvimento_orcamentos_whatsapp.pdf com o codigo dos repos
 uatz-server, uatz-model, uatz-migration e uatz-web (branch main).
 
+REVISADO EM 06/08/2026, conferindo item a item contra o codigo. A etapa 3 estava
+marcada como pendente mas ja tinha sido implementada; os itens de seguranca e
+operacao entraram vindos de avaliacao-tecnica.txt.
+
 Como usar: troque [ ] por [x] quando concluir. Mantenha a linha de evidencia
 (arquivo:linha) para quem pegar o item depois.
+
+ATENCAO: este arquivo ja esteve desatualizado uma vez e quase custou uma avaliacao
+errada do projeto. Ao concluir um item, marque aqui no mesmo commit.
 ====================================================================================
 
 JA CONCLUIDO (nao entra na lista, so para referencia)
   Etapa 1 - Planejamento e estrutura inicial
   Etapa 2 - Backend basico (entidades, JWT, APIs, modulos)
+  Etapa 3 - Integracao WhatsApp: TODO O CODIGO (falta so a burocracia da Meta)
   Etapa 4 - Painel web do fornecedor (login, lista, resposta, recibo)
+  Etapa 6 - Fechamento do ciclo no servidor
+  Seguranca - escopo por JWT nas cotacoes, rotacao das chaves, validacao no startup
+  Performance - indices das consultas quentes
 
 
 ------------------------------------------------------------------------------------
@@ -26,14 +38,16 @@ PRIORIDADE 1 - QUICK WINS (destravam a etapa 5 e custam pouco)
           de revisao e enviar o id escolhido.
           - uatz-web: detalhe-orcamento.component.ts:180 (productId: null)
           - uatz-server: BudgetRequestServiceImpl.java (resolveProduct, ~206)
+          CONFERIDO EM 06/08/2026: continua valendo.
 
 [ ] F1.2  Parser tentar casar o item com um produto existente
           O parser cria todo item com productId null.
-          - uatz-server: BudgetRequestServiceImpl.java:279 e :283
+          - uatz-server: BudgetRequestServiceImpl.java (parseWhatsAppItems)
 
 [ ] F1.3  Filtrar fornecedor por cidade/estado no dispatch
           O pedido tem city e o fornecedor tem city/state, mas a elegibilidade
           ignora as duas coisas. O objetivo declarado e "marketplace regional".
+          FAZER JUNTO COM O F4.3: e o mesmo WHERE, e resolve os dois de uma vez.
           - uatz-server: BudgetRequestDistributionServiceImpl.java:65-72
 
 [ ] F1.4  Definir a regra quando nao ha fornecedor elegivel apos os filtros
@@ -49,7 +63,6 @@ cliente -> fechamento -> liberacao dos contatos -> link de conversa)
 
 [x] F2.1  Interface WhatsAppGateway (abstrair o transporte)
           service/WhatsAppGateway.java + service/impl/WhatsAppGatewayImpl.java
-          (a impl atual so loga; a Cloud API entra trocando o bean)
 
 [x] F2.2  Servico que monta a lista de orcamentos do pedido
           BudgetRequestClosingServiceImpl.sendQuoteOptions - numera as cotacoes
@@ -71,17 +84,22 @@ cliente -> fechamento -> liberacao dos contatos -> link de conversa)
           - POST budget-requests/{id}/quote-options
           - POST budget-requests/{id}/selection   { "optionNumber": 2 }
           - GET  budget-requests/{id}/selection
+          CONFERIDO EM 06/08/2026: nenhum desses endpoints aparece em
+          uatz-web/src/app/static/constants/endpoints.constant.ts. Continua aberto.
 
 [ ] F2.7  Front: DTOs novos do pedido
           BudgetRequestResponse ganhou quotesSentAt, closedAt, selectedQuoteId e
           selectedVendorId; clientPhone agora vem nulo para fornecedor que nao
           foi escolhido.
+          CONFERIDO EM 06/08/2026: os campos nao existem nos DTOs do front.
 
 [ ] F2.8  Decidir o comportamento em reenvio da lista
           sendQuoteOptions renumera todas as cotacoes a cada chamada. Se chegar
           cotacao nova e a lista for reenviada, um "2" respondido sobre a lista
           antiga aponta para outro fornecedor. Opcoes: travar reenvio, versionar
           a lista, ou casar a resposta com a mensagem enviada.
+          ISSO E BUG DE DINHEIRO, NAO DE UX: fecha o pedido com o fornecedor
+          errado. Subiu de prioridade na avaliacao tecnica.
 
 [ ] F2.9  Idempotencia da escolha
           Hoje uma segunda chamada de selectOption devolve 409 PEDIDO_JA_FECHADO.
@@ -91,42 +109,47 @@ cliente -> fechamento -> liberacao dos contatos -> link de conversa)
 
 ------------------------------------------------------------------------------------
 PRIORIDADE 3 - ETAPA 3: INTEGRACAO WHATSAPP REAL
-(a parte de dominio ja esta pronta: createFromWhatsAppSimulation acha/cria o
-Client, grava Conversation + Message IN, roda o parser e cria o pedido.
-Falta somente o transporte e a borda HTTP)
+(REVISADO EM 06/08/2026 - o codigo estava pronto e o arquivo dizia o contrario.
+Sobrou o que nao depende de programar.)
 ------------------------------------------------------------------------------------
 
 [ ] F3.1  Conta Meta business, numero verificado e app da WhatsApp Cloud API
           Pre-requisito externo, comecar cedo por causa do tempo de aprovacao.
+          E O UNICO ITEM DO CAMINHO CRITICO COM PRAZO QUE NAO DEPENDE DO TIME.
 
-[ ] F3.2  Configuracao: token, phone number id e verify token
-          Via env vars, no padrao ja usado em application.properties.
+[x] F3.2  Configuracao: token, phone number id e verify token
+          application.properties (whatsapp.*) + env/Enviroment.java
 
-[ ] F3.3  REST Client da Graph API para envio de mensagem
+[x] F3.3  REST Client da Graph API para envio de mensagem
+          client/WhatsAppCloudApiClient.java (@RegisterRestClient whatsapp-cloud-api)
 
-[ ] F3.4  GET /api/whatsapp/webhook - verificacao (hub.challenge)
-          Precisa ser publico (@PermitAll), como o AuthControllerImpl.
+[x] F3.4  GET /api/whatsapp/webhook - verificacao (hub.challenge)
+          WhatsAppWebhookControllerImpl.verify, @PermitAll
 
-[ ] F3.5  POST /api/whatsapp/webhook - recebimento
-          Validar X-Hub-Signature-256 antes de processar.
+[x] F3.5  POST /api/whatsapp/webhook - recebimento
+          WhatsAppWebhookServiceImpl.process valida X-Hub-Signature-256 antes de
+          processar; HMAC em util/WhatsAppSignatureUtil (corpo bruto, comparacao
+          em tempo constante)
 
-[ ] F3.6  Mapear o payload da Cloud API para o pipeline que ja existe
-          Renomear createFromWhatsAppSimulation para algo neutro
-          (ex.: createFromInboundMessage) e ter os dois caminhos entrando nele.
-          - uatz-server: BudgetRequestServiceImpl.java:98
-
-[ ] F3.10 Webhook interpretar a resposta numerica do cliente
-          Quando a mensagem recebida for so um numero e o pedido tiver
-          quotes_sent_at, chamar BudgetRequestClosingService.selectOption em vez
-          de abrir um pedido novo.
+[x] F3.6  Mapear o payload da Cloud API para o pipeline que ja existe
+          createFromWhatsAppMessage e o ponto neutro; a simulacao e o webhook
+          entram os dois nele
 
 [ ] F3.7  Idempotencia por id de mensagem do WhatsApp
           A Meta reenvia webhook; hoje cada POST criaria um pedido novo.
+          UNICO ITEM DE CODIGO QUE SOBROU DA ETAPA 3, e o mais importante:
+          sem ele, um reenvio da Meta duplica o pedido na frente do lojista.
+          Precisa de tabela nova (message_id unico) + changelog.
 
-[ ] F3.8  Manter POST whatsapp/simulations funcionando para dev e testes
-          E hoje a unica porta de entrada; nao remover ao ligar o webhook.
+[x] F3.8  Manter POST whatsapp/simulations funcionando para dev e testes
+          WhatsAppSimulationControllerImpl continua ativo (ADMIN/OPERATOR)
 
 [ ] F3.9  HTTPS publico para o ambiente de desenvolvimento (tunel)
+
+[x] F3.10 Webhook interpretar a resposta numerica do cliente
+          WhatsAppWebhookServiceImpl.handleText + parseOptionNumber: numero
+          isolado com pedido aguardando escolha vira selectOption; qualquer outra
+          coisa vira pedido novo
 
 
 ------------------------------------------------------------------------------------
@@ -140,25 +163,144 @@ PRIORIDADE 4 - ETAPA 5: RESTO DA DISTRIBUICAO
 [ ] F4.2  Notificar o fornecedor de que existe pedido novo
           Nada avisa o fornecedor hoje - ele precisa abrir o painel e olhar.
 
+[ ] F4.3  Corrigir o N+1 do dispatch
+          findAllActive() traz todo fornecedor ativo e roda findProductIdsByVendorId
+          DENTRO do stream: uma query por fornecedor. Com 500 lojas, 500 queries
+          para distribuir um pedido. Trocar por uma query so:
+          SELECT DISTINCT vendor_id FROM vendor_products WHERE product_id IN :ids
+          - uatz-server: BudgetRequestDistributionServiceImpl.java:65-72
+          FAZER JUNTO COM O F1.3 - e o mesmo WHERE.
+
+
+------------------------------------------------------------------------------------
+PRIORIDADE 5 - SEGURANCA E OPERACAO
+(entrou em 06/08/2026, de avaliacao-tecnica.txt)
+------------------------------------------------------------------------------------
+
+[x] F5.1  Escopar as cotacoes por JWT
+          Um fornecedor logado lia as cotacoes dos concorrentes (com preco) e
+          conseguia registrar cotacao EM NOME DE OUTRO FORNECEDOR - o vendorId
+          vinha do corpo da requisicao e nunca era conferido com o token.
+          Corrigido: a classe passou a liberar so ADMIN/OPERATOR e cada metodo
+          abre VENDOR explicitamente; metodo novo nasce fechado para o fornecedor.
+          - uatz-server: VendorQuoteControllerImpl, VendorQuoteService(+Impl)
+          - uatz-web: detalhe-orcamento.component.ts (nao pede mais o resumo
+            quando e fornecedor) e .html:24 (card "Cotacoes" agora e so de
+            admin/operador - a API entregava o dado e o ngIf so escondia na tela)
+
+[x] F5.2  Tirar as chaves do JWT do repositorio
+          privateKey.pem estava versionado: quem tivesse o repo assinava token
+          ADMIN para qualquer e-mail. Par novo gerado, chaves movidas para .keys/
+          (no .gitignore e fora de src/main/resources, para nao irem dentro do
+          jar), lidas por JWT_PUBLIC_KEY_LOCATION / JWT_PRIVATE_KEY_LOCATION.
+
+[x] F5.3  Falhar no startup com configuracao de seguranca quebrada
+          startup/impl/ValidacaoConfiguracaoImpl: assina e rele um token
+          descartavel (pega chave ilegivel e par trocado) e exige app-secret,
+          verify-token, access-token e phone-number-id quando WHATSAPP_ENABLED=true
+          - antes, sem app-secret a assinatura do webhook era pulada com um warn.
+
+[x] F5.4  Indices das consultas quentes
+          13 tabelas e nenhum indice alem de PK/unique: o Postgres nao indexa
+          coluna de FK sozinho. 7 indices em db.changelog-10000008.xml, cada um
+          ligado a uma consulta que existe no codigo.
+          Inclui UNIQUE em vendors(email): e a identidade de login do fornecedor
+          e nao era unica - dois cadastros com o mesmo e-mail fariam o
+          findByEmail devolver um fornecedor arbitrario.
+
+[ ] F5.5  Purgar as chaves antigas do historico do Git
+          O par foi rotacionado (a chave exposta nao assina mais nada), mas ela
+          continua em todos os commits anteriores. git filter-repo resolve;
+          reescreve todos os SHAs e exige push --force. Decisao do dono do repo.
+
+[ ] F5.6  Validar e-mail duplicado de fornecedor no servico
+          O UNIQUE do F5.4 barra no banco, mas devolve erro de constraint em vez
+          de mensagem de negocio. Espelhar o que UserServiceImpl faz com
+          EMAIL_JA_EXISTE.
+          - uatz-server: VendorServiceImpl.java:93
+
+[ ] F5.7  Rate limiting no login
+          POST /api/auth/login e @PermitAll sem throttling. Bcrypt segura brute
+          force offline, nao online nem enumeracao de usuario.
+
+[ ] F5.8  Refresh token e revogacao
+          Token de 1h sem renovacao nem revogacao: trocar a role de um usuario ou
+          desativar um fornecedor nao invalida o token que ele ja tem.
+          - uatz-server: TokenServiceImpl.java:14
+
+[ ] F5.9  CORS e Swagger de producao
+          quarkus.http.cors.origins so aceita localhost:4200 e
+          quarkus.swagger-ui.always-include=true publica o Swagger.
+
+[ ] F5.10 LGPD minimo
+          Sao armazenados telefone, cidade e o conteudo integral das conversas.
+          Falta base legal, politica de retencao e caminho de exclusao. Minimo:
+          politica de privacidade, aviso na primeira mensagem do bot e
+          DELETE /clients/{id} com anonimizacao.
+
+[ ] F5.11 Dockerfile e deploy
+          Nao existe imagem, IaC nem pipeline. So um docker-compose.yml do
+          Postgres local. Quarkus gera os arquivos com -Dquarkus.container-image.
+
+[ ] F5.12 Backup do Postgres com restore testado
+          pg_dump diario para um bucket. Backup nao testado nao e backup.
+
+[ ] F5.13 Alerta de indisponibilidade
+          /q/health ja existe (quarkus-smallrye-health). Falta alguem olhando:
+          UptimeRobot a cada 5 min avisando no WhatsApp resolve e e gratuito.
+
+[ ] F5.14 CI rodando mvnw verify no push
+          Sem pipeline, cada retomada depois de um mes parado custa meio dia so
+          para reconstruir confianca no que esta funcionando.
+
+
+------------------------------------------------------------------------------------
+PRIORIDADE 6 - AGUENTAR OS PRIMEIROS CLIENTES
+------------------------------------------------------------------------------------
+
+[ ] F6.1  Paginacao nas listagens de pedido
+          findAllWithItems() traz TODOS os pedidos que ja existiram, sem
+          paginacao nem filtro, e dispara um findByRequestId por pedido. Com
+          1.000 pedidos: 1.001 queries e a tabela inteira em memoria a cada
+          carregamento de tela.
+          - uatz-server: BudgetRequestServiceImpl.java:165-173
+
+[ ] F6.2  Filtrar no SQL a listagem do fornecedor
+          findAllWithItemsForVendor carrega TODOS os pedidos e filtra em Java com
+          List.contains - O(n*m). O fornecedor paga o custo de ler pedidos que
+          nem pode ver.
+          - uatz-server: BudgetRequestServiceImpl.java:176-190
+
+[ ] F6.3  VendorQuote.items de EAGER para LAZY
+          Toda listagem de cotacoes dispara uma query de itens POR COTACAO. O
+          indice do F5.4 deixa cada uma barata, mas o certo e LAZY + join fetch
+          onde precisa.
+          - uatz-model: VendorQuote.java:44
+
 
 ------------------------------------------------------------------------------------
 DEPOIS (etapas 7 a 10, nada iniciado)
 ------------------------------------------------------------------------------------
 
-[ ] F5.1  Etapa 7 - historico de precos
-[ ] F5.2  Etapa 7 - relatorio de media de precos
-[ ] F5.3  Etapa 7 - tempo de resposta do fornecedor
+[ ] F7.1  Etapa 7 - historico de precos
+          Nao e feature, e o ativo de dados da empresa: vendor_quotes acumulando
+          preco por produto/loja/regiao e o que ninguem copia em 3 meses.
+          Comecar a acumular cedo, mesmo sem tela.
+[ ] F7.2  Etapa 7 - relatorio de media de precos
+[ ] F7.3  Etapa 7 - tempo de resposta do fornecedor
           (viewedAt e respondedAt ja sao gravados, falta o relatorio)
-[ ] F5.4  Etapa 8 - sugestao automatica de produtos
-[ ] F5.5  Etapa 8 - notificacoes para fornecedores
-[ ] F5.6  Etapa 9 - Redis para cache
-[ ] F5.7  Etapa 9 - filas de processamento
-[ ] F5.8  Etapa 9 - preparar separacao em microservicos
-[ ] F5.9  Etapa 10 - multiplas categorias
-[ ] F5.10 Etapa 10 - multiplas cidades e regioes
-[ ] F5.11 Etapa 10 - IA para interpretar mensagens
-[ ] F5.12 Etapa 10 - marketplace regional de comparacao de precos
-[ ] F5.13 WebSocket para tempo real (consta na stack do PROJECT_CONTEXT,
+[ ] F7.4  Etapa 8 - sugestao automatica de produtos
+[ ] F7.5  Etapa 8 - notificacoes para fornecedores
+[ ] F7.6  Etapa 9 - filas de processamento
+          O webhook processa tudo dentro do request HTTP da Meta, que tem timeout
+          e reenvia o que nao recebe 200 rapido. GATILHO: 100 pedidos/dia.
+[ ] F7.7  Etapa 9 - Redis para cache        GATILHO: nao ha. Nao fazer ainda.
+[ ] F7.8  Etapa 9 - separacao em microservicos   GATILHO: nao ha. Nao fazer ainda.
+[ ] F7.9  Etapa 10 - multiplas categorias
+[ ] F7.10 Etapa 10 - multiplas cidades e regioes
+[ ] F7.11 Etapa 10 - IA para interpretar mensagens
+[ ] F7.12 Etapa 10 - marketplace regional de comparacao de precos
+[ ] F7.13 WebSocket para tempo real (consta na stack do PROJECT_CONTEXT,
           nao aparece no roadmap nem no codigo)
 
 
@@ -172,7 +314,8 @@ DIVIDA TECNICA / OBSERVACOES
         nao le o flag, e a view so renderiza porque o valueChanges do FormArray
         chama markForCheck por acidente. Mesmo defeito que deixou a tela
         cotacao-enviada em branco (corrigido em 05/08/2026).
-        - uatz-web: detalhe-orcamento.component.ts:329
+        - uatz-web: detalhe-orcamento.component.ts:300 (paramMap) e :334 (finalize)
+        CONFERIDO EM 06/08/2026: continua valendo.
 
 [ ] D2  Nao existe usuario semeado no banco
         O primeiro admin sai de POST auth/bootstrap, que se autotranca quando a
@@ -181,10 +324,34 @@ DIVIDA TECNICA / OBSERVACOES
 
 [ ] D3  Exemplo "Create Vendor" da collection do Postman esta sem password
         Como a senha e obrigatoria na criacao, a requisicao como esta da 400.
-        - uatz-server: postman/uatz-local.postman_collection.json:488
+        - uatz-server: postman/uatz-local.postman_collection.json
+        CONFERIDO EM 06/08/2026: continua valendo (vale tambem para
+        "Create Vendor Quote").
 
-[ ] D4  Sem testes automatizados no fluxo de orcamento
-        Avaliar cobertura minima para parser, dispatch e vendor-quotes.
+[ ] D4  Sem testes automatizados
+        quarkus-junit5, rest-assured, surefire e failsafe estao TODOS no pom e
+        nao existe um unico arquivo em src/test. Os dois furos do F5.1 seriam
+        pegos por um teste de autorizacao de 5 minutos.
+        Os 3 que pagam o investimento, nesta ordem:
+          1. fornecedor A nao le a cotacao de B e nao cota no nome de B
+          2. parser: "10 sacos de cimento\n100 tijolos" -> 2 itens certos
+          3. webhook: assinatura invalida -> 403; payload duplicado -> 1 pedido
+        BLOQUEIO: @QuarkusTest precisa de banco. O DevServices sobe Postgres via
+        Docker, que nao esta instalado na maquina de desenvolvimento.
+
+[ ] D5  Duas ferramentas de migracao no mesmo repo
+        uatz-migration/db-flyway-legado/V1..V7 convivendo com os changelogs
+        Liquibase. Se algum ambiente ja rodou o Flyway, ha duas fontes de verdade
+        do schema. Deletar a pasta legada e registrar no README qual e a autoridade.
+
+[ ] D6  uatz-model e uatz-migration acoplados por mvn install local
+        Nao ha repositorio de artefatos: a build depende do .m2 da maquina. Um CI
+        limpo nao compila sem buildar os tres na ordem certa.
+
+[ ] D7  Estado do pedido modelado duas vezes
+        StatusEntity em tabela + StatusType/BudgetRequestStatus em enum, e cada
+        transicao paga um findByTypeAndCode. Divida deliberada - nao mexer agora.
+        - uatz-server: BudgetRequestDistributionServiceImpl.java:182-190
 
 
 ------------------------------------------------------------------------------------
@@ -192,9 +359,13 @@ REFERENCIAS
 ------------------------------------------------------------------------------------
 context/PROJECT_CONTEXT.md ................. visao de produto, modelo de dados
 context/roadmap_desenvolvimento_orcamentos_whatsapp.pdf .... 10 etapas
+avaliacao-tecnica.txt ...................... due diligence tecnica (06/08/2026)
+memorando-investimento.txt ................. avaliacao de negocio (06/08/2026)
 uatz-server/CLAUDE.md ...................... padroes do backend
 uatz-web/CLAUDE.md ......................... padroes do frontend
+uatz-web fica em D:\dsv-git\dsv-java\uatz-web (raiz diferente dos projetos Java)
 
-Ordem recomendada: P1 -> P2 -> P3 -> P4 -> depois.
-A etapa 6 vem antes da 3 de proposito: fechar o ciclo ate o cliente e o que
+Ordem recomendada: F3.1 (comecar hoje, depende da Meta) -> P1 -> P2 -> F3.7 -> P4.
+A etapa 6 vem antes do resto de proposito: fechar o ciclo ate o cliente e o que
 transforma o que ja existe em MVP demonstravel e nao depende da Meta.
+====================================================================================
