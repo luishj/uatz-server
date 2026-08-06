@@ -11,6 +11,7 @@ import br.com.uatz.server.exception.CloudMessage;
 import br.com.uatz.server.exception.MessageBuilder;
 import br.com.uatz.server.repository.BudgetRequestRepository;
 import br.com.uatz.server.repository.VendorQuoteRepository;
+import br.com.uatz.server.repository.WhatsAppInboundMessageRepository;
 import br.com.uatz.server.service.BudgetRequestClosingService;
 import br.com.uatz.server.service.BudgetRequestService;
 import br.com.uatz.server.service.ConversationService;
@@ -46,6 +47,7 @@ public class WhatsAppWebhookServiceImpl implements WhatsAppWebhookService {
     private final ObjectMapper objectMapper;
     private final BudgetRequestRepository budgetRequestRepository;
     private final VendorQuoteRepository vendorQuoteRepository;
+    private final WhatsAppInboundMessageRepository inboundMessageRepository;
     private final BudgetRequestService budgetRequestService;
     private final BudgetRequestClosingService budgetRequestClosingService;
     private final ConversationService conversationService;
@@ -56,6 +58,7 @@ public class WhatsAppWebhookServiceImpl implements WhatsAppWebhookService {
             ObjectMapper objectMapper,
             BudgetRequestRepository budgetRequestRepository,
             VendorQuoteRepository vendorQuoteRepository,
+            WhatsAppInboundMessageRepository inboundMessageRepository,
             BudgetRequestService budgetRequestService,
             BudgetRequestClosingService budgetRequestClosingService,
             ConversationService conversationService,
@@ -65,6 +68,7 @@ public class WhatsAppWebhookServiceImpl implements WhatsAppWebhookService {
         this.objectMapper = objectMapper;
         this.budgetRequestRepository = budgetRequestRepository;
         this.vendorQuoteRepository = vendorQuoteRepository;
+        this.inboundMessageRepository = inboundMessageRepository;
         this.budgetRequestService = budgetRequestService;
         this.budgetRequestClosingService = budgetRequestClosingService;
         this.conversationService = conversationService;
@@ -146,6 +150,11 @@ public class WhatsAppWebhookServiceImpl implements WhatsAppWebhookService {
      * Uma falha em uma mensagem não pode derrubar o lote: a Meta reenvia o
      * evento inteiro quando o webhook não responde 200, o que reprocessaria as
      * mensagens que já deram certo.
+     *
+     * <p>Antes de processar, a mensagem é registrada pelo seu {@code id}: se ele
+     * já existe, é um reenvio da Meta e a mensagem é ignorada — sem isso cada
+     * reenvio criaria um pedido de orçamento novo. Mensagem sem {@code id} (caso
+     * malformado, raro) segue sem a trava, para não ser descartada em silêncio.</p>
      */
     private void handleMessage(WhatsAppWebhookMessage message) {
         if (!TIPO_TEXTO.equals(message.type()) || message.text() == null) {
@@ -161,10 +170,16 @@ public class WhatsAppWebhookServiceImpl implements WhatsAppWebhookService {
             return;
         }
 
+        String messageId = message.id();
+        if (!StringUtil.isNullOrEmpty(messageId) && !inboundMessageRepository.claim(messageId)) {
+            logger.infof("Mensagem %s ignorada: já processada (reenvio da Meta)", messageId);
+            return;
+        }
+
         try {
             handleText(phone, text.trim());
         } catch (Exception e) {
-            logger.errorf(e, "Falha ao processar a mensagem %s de %s", message.id(), phone);
+            logger.errorf(e, "Falha ao processar a mensagem %s de %s", messageId, phone);
         }
     }
 

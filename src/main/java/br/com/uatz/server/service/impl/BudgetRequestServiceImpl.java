@@ -25,12 +25,11 @@ import br.com.uatz.server.service.BudgetRequestService;
 import br.com.uatz.server.service.ConversationService;
 import br.com.uatz.server.exception.CloudMessage;
 import br.com.uatz.server.exception.MessageBuilder;
+import br.com.uatz.server.util.WhatsAppItemParser;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.core.Response.Status;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -110,7 +109,7 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
         conversationService.registerInbound(conversation, message);
 
         BudgetRequest budgetRequest = createBudgetRequestBase(client, city, CANAL_WHATSAPP, message, conversation);
-        List<BudgetItem> items = persistItems(budgetRequest, parseWhatsAppItems(message));
+        List<BudgetItem> items = persistItems(budgetRequest, WhatsAppItemParser.parse(message));
         return BudgetRequestMapping.toResponse(budgetRequest, items);
     }
 
@@ -259,56 +258,5 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
             client.setState(state);
         }
         return clientRepository.save(client);
-    }
-
-    private List<BudgetItemRequest> parseWhatsAppItems(String rawMessage) {
-        List<String> rawItems = splitRawItems(rawMessage);
-        List<BudgetItemRequest> items = new ArrayList<>();
-
-        for (String rawItem : rawItems) {
-            String cleaned = rawItem.trim();
-            if (cleaned.isBlank()) {
-                continue;
-            }
-
-            BigDecimal quantity = BigDecimal.ONE;
-            String description = cleaned;
-            String unit = "un";
-
-            String[] tokens = cleaned.split("\\s+", 2);
-            if (tokens.length > 1 && tokens[0].matches("\\d+[\\.,]?\\d*")) {
-                quantity = new BigDecimal(tokens[0].replace(",", "."));
-                description = tokens[1].trim();
-            }
-
-            if (description.toLowerCase().contains("saco")) {
-                unit = "saco";
-            } else if (description.toLowerCase().contains("metro")) {
-                unit = "m";
-            } else if (description.toLowerCase().contains("caixa")) {
-                unit = "caixa";
-            }
-
-            items.add(new BudgetItemRequest(null, description, quantity, unit));
-        }
-
-        if (items.isEmpty()) {
-            items.add(new BudgetItemRequest(null, rawMessage.trim(), BigDecimal.ONE, "un"));
-        }
-
-        return items;
-    }
-
-    private List<String> splitRawItems(String rawMessage) {
-        if (rawMessage.contains("\n")) {
-            return rawMessage.lines().toList();
-        }
-        if (rawMessage.contains(";")) {
-            return List.of(rawMessage.split(";"));
-        }
-        if (rawMessage.contains(",")) {
-            return List.of(rawMessage.split(","));
-        }
-        return List.of(rawMessage);
     }
 }
