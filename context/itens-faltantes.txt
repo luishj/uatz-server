@@ -42,7 +42,9 @@ PRIORIDADE 1 - QUICK WINS (destravam a etapa 5 e custam pouco)
 
 [ ] F1.2  Parser tentar casar o item com um produto existente
           O parser cria todo item com productId null.
-          - uatz-server: BudgetRequestServiceImpl.java (parseWhatsAppItems)
+          - uatz-server: util/WhatsAppItemParser.java (parse) - o parser saiu de
+            BudgetRequestServiceImpl.parseWhatsAppItems para uma classe propria
+            testavel em 06/08/2026; o casamento com produto continua aberto.
 
 [ ] F1.3  Filtrar fornecedor por cidade/estado no dispatch
           O pedido tem city e o fornecedor tem city/state, mas a elegibilidade
@@ -135,11 +137,17 @@ Sobrou o que nao depende de programar.)
           createFromWhatsAppMessage e o ponto neutro; a simulacao e o webhook
           entram os dois nele
 
-[ ] F3.7  Idempotencia por id de mensagem do WhatsApp
-          A Meta reenvia webhook; hoje cada POST criaria um pedido novo.
-          UNICO ITEM DE CODIGO QUE SOBROU DA ETAPA 3, e o mais importante:
-          sem ele, um reenvio da Meta duplica o pedido na frente do lojista.
-          Precisa de tabela nova (message_id unico) + changelog.
+[x] F3.7  Idempotencia por id de mensagem do WhatsApp
+          A Meta reenvia webhook; sem trava cada POST criaria um pedido novo.
+          CONCLUIDO EM 06/08/2026: tabela whatsapp_inbound_messages (message_id
+          unico) + db.changelog-10000009.xml. handleMessage registra o id antes
+          de processar, via WhatsAppInboundMessageRepository.claim() numa
+          transacao REQUIRES_NEW: se o id ja existe e reenvio e a mensagem e
+          ignorada. At-most-once de proposito; a falha grita no log.
+          - uatz-model: WhatsAppInboundMessage.java
+          - uatz-server: repository/WhatsAppInboundMessageRepository(+Impl),
+            WhatsAppWebhookServiceImpl.handleMessage
+          Com isso a etapa 3 nao tem mais nenhum item de codigo pendente.
 
 [x] F3.8  Manter POST whatsapp/simulations funcionando para dev e testes
           WhatsAppSimulationControllerImpl continua ativo (ADMIN/OPERATOR)
@@ -328,16 +336,21 @@ DIVIDA TECNICA / OBSERVACOES
         CONFERIDO EM 06/08/2026: continua valendo (vale tambem para
         "Create Vendor Quote").
 
-[ ] D4  Sem testes automatizados
-        quarkus-junit5, rest-assured, surefire e failsafe estao TODOS no pom e
-        nao existe um unico arquivo em src/test. Os dois furos do F5.1 seriam
-        pegos por um teste de autorizacao de 5 minutos.
-        Os 3 que pagam o investimento, nesta ordem:
-          1. fornecedor A nao le a cotacao de B e nao cota no nome de B
-          2. parser: "10 sacos de cimento\n100 tijolos" -> 2 itens certos
-          3. webhook: assinatura invalida -> 403; payload duplicado -> 1 pedido
-        BLOQUEIO: @QuarkusTest precisa de banco. O DevServices sobe Postgres via
-        Docker, que nao esta instalado na maquina de desenvolvimento.
+[x] D4  Testes automatizados dos 3 pontos onde o dinheiro passa
+        CONCLUIDO EM 06/08/2026: os 3 testes prioritarios foram escritos.
+          1. VendorQuoteAuthorizationTest - fornecedor recebe 403 nas visoes
+             comparativas e no resumo (trava o furo do F5.1)
+          2. WhatsAppItemParserTest - parser em src/test, RODA VERDE (6 casos:
+             quantidade, unidade, virgula decimal, mensagem vazia). Documenta a
+             limitacao de a virgula sozinha, sem quebra de linha, ser separador
+             de itens e nao decimal.
+          3. WhatsAppWebhookTest - assinatura invalida 403, valida 200, mesmo
+             payload duas vezes cria um pedido so (valida o F3.7)
+        - uatz-server: src/test/java/br/com/uatz/server/** + helper TestTokens
+        RESSALVA: os testes 1 e 3 sao @QuarkusTest e precisam de .keys/ + banco
+        uatz_test com as migrations aplicadas para rodar (sem Docker o DevServices
+        nao sobe Postgres). O teste do parser roda sem banco. Perfil de teste em
+        application.properties (%test.database.url, %test.whatsapp.app-secret).
 
 [ ] D5  Duas ferramentas de migracao no mesmo repo
         uatz-migration/db-flyway-legado/V1..V7 convivendo com os changelogs
