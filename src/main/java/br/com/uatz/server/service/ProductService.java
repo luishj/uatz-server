@@ -12,5 +12,12 @@ public interface ProductService {
     Optional<Product> findById(Long id);
 
     List<Product> findAll();
+
+    /**
+     * Semeia um apelido SEED para cada produto do catálogo. Backfill único para
+     * os produtos criados antes do casamento por apelido existir; é idempotente
+     * (apelido repetido é ignorado). Retorna quantos produtos foram varridos.
+     */
+    int semearApelidosDosProdutos();
 }
 

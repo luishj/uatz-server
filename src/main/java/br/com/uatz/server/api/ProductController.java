@@ -23,6 +23,14 @@ public interface ProductController {
     @POST
     public abstract Response create(@Valid ProductRequest request);
 
+    /**
+     * Backfill único: semeia os apelidos dos produtos que já existiam antes do
+     * casamento por apelido. Idempotente.
+     */
+    @POST
+    @Path("/seed-aliases")
+    public abstract Response seedAliases();
+
     @GET
     public abstract List<ProductResponse> findAll();
 

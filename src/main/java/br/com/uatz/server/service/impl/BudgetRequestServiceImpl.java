@@ -20,9 +20,11 @@ import br.com.uatz.server.repository.ClientRepository;
 import br.com.uatz.server.repository.ProductRepository;
 import br.com.uatz.server.repository.StatusRepository;
 import br.com.uatz.server.repository.VendorRepository;
+import br.com.uatz.server.constante.Escopo;
 import br.com.uatz.server.service.BudgetRequestDistributionService;
 import br.com.uatz.server.service.BudgetRequestService;
 import br.com.uatz.server.service.ConversationService;
+import br.com.uatz.server.service.ProductMatchingService;
 import br.com.uatz.server.exception.CloudMessage;
 import br.com.uatz.server.exception.MessageBuilder;
 import br.com.uatz.server.util.WhatsAppItemParser;
@@ -46,6 +48,7 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
     private final VendorRepository vendorRepository;
     private final BudgetRequestDistributionService budgetRequestDistributionService;
     private final ConversationService conversationService;
+    private final ProductMatchingService productMatchingService;
 
     public BudgetRequestServiceImpl(
             BudgetRequestRepository budgetRequestRepository,
@@ -55,7 +58,8 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
             StatusRepository statusRepository,
             VendorRepository vendorRepository,
             BudgetRequestDistributionService budgetRequestDistributionService,
-            ConversationService conversationService
+            ConversationService conversationService,
+            ProductMatchingService productMatchingService
     ) {
         this.budgetRequestRepository = budgetRequestRepository;
         this.budgetItemRepository = budgetItemRepository;
@@ -65,6 +69,7 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
         this.vendorRepository = vendorRepository;
         this.budgetRequestDistributionService = budgetRequestDistributionService;
         this.conversationService = conversationService;
+        this.productMatchingService = productMatchingService;
     }
 
     @Override
@@ -201,20 +206,29 @@ public class BudgetRequestServiceImpl implements BudgetRequestService {
     private BudgetItem createItem(BudgetRequest budgetRequest, BudgetItemRequest request) {
         BudgetItem item = new BudgetItem();
         item.setRequest(budgetRequest);
-        item.setProduct(resolveProduct(request.productId()));
+        item.setProduct(resolveProduct(request.productId(), request.productName()));
         item.setProductName(request.productName());
         item.setQuantity(request.quantity());
         item.setUnit(request.unit());
         return budgetItemRepository.save(item);
     }
 
-    private Product resolveProduct(Long productId) {
-        if (productId == null) {
-            return null;
+    /**
+     * Com productId explícito (triagem), resolve por id — não achar é erro do
+     * operador. Sem productId (item vindo do parser do WhatsApp), tenta o
+     * casamento F1.2 por ACERTO EXATO: nunca fuzzy, para não vincular errado sem
+     * confirmação. Sem acerto, o item fica sem produto e o vínculo espera a
+     * triagem.
+     */
+    private Product resolveProduct(Long productId, String productName) {
+        if (productId != null) {
+            return productRepository.findOptionalById(productId)
+                    .orElseThrow(() -> MessageBuilder.build(CloudMessage.PRODUTO_NAO_ENCONTRADO, Status.NOT_FOUND));
         }
 
-        return productRepository.findOptionalById(productId)
-                .orElseThrow(() -> MessageBuilder.build(CloudMessage.PRODUTO_NAO_ENCONTRADO, Status.NOT_FOUND));
+        return productMatchingService.resolverProdutoExato(Escopo.CONSTRUCAO, productName)
+                .flatMap(productRepository::findOptionalById)
+                .orElse(null);
     }
 
     private BudgetRequest createBudgetRequestBase(Client client, String city, String sourceChannel, String sourceMessage, Conversation conversation) {

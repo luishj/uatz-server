@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
 import java.util.List;
+import java.util.Map;
 
 @RolesAllowed({Perfil.ADMIN, Perfil.OPERATOR})
 public class ProductControllerImpl implements ProductController {
@@ -24,6 +25,13 @@ public class ProductControllerImpl implements ProductController {
     public Response create(ProductRequest request) {
         ProductResponse response = ProductMapping.toResponse(productService.create(request));
         return Response.status(Status.CREATED).entity(response).build();
+    }
+
+    @Override
+    @RolesAllowed(Perfil.ADMIN)
+    public Response seedAliases() {
+        int produtos = productService.semearApelidosDosProdutos();
+        return Response.ok(Map.of("produtosSemeados", produtos)).build();
     }
 
     @Override
